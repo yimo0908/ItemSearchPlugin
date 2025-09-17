@@ -1,7 +1,7 @@
 name: Item Search
-author: Caraxi, maintained & updated by Khayle
+author: Caraxi, maintained & updated by Khayle, translated by Yimo 
 description: |-
   Filterable search for Items and Key Items.
   Try on any item without having to find someone to link it.
-repo_url: https://github.com/Caraxi/ItemSearchPlugin
-punchline: Search and link items, even if you don't have them.
+repo_url: https://github.com/yimo0908/ItemSearchPlugin
+punchline: 搜索并展示物品，哪怕你未曾拥有.
