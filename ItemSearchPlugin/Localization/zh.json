@@ -1,0 +1,68 @@
+{
+   
+    "ItemSearchCommandHelp": "打开一个可将任意特定物品展示到聊天框的窗口。",
+    "ItemSearchFittingRoomCommand": "打开试穿室。",
+    
+    "ItemSearchConfigItemLanguage": "物品语言",
+    "LanguageAutomatic": "自动",
+    "ItemSearchConfigSort": "排序物品列表",
+    "LanguageDefault": "默认",
+    "ItemSearchConfigUILanguage": "界面语言",
+    "ItemSearchConfigCloseAfterLink": "展示物品后关闭窗口",
+    "ItemSearchConfigAutoFocus": "自动聚焦搜索框",
+    "ItemSearchConfigShowItemId": "显示物品ID",
+    "ItemSearchConfigEnableMarketBoard": "市场插件集成",
+    "ItemSearchConfigEnableTryOn": "启用试穿功能",
+    "ItemSearchConfigSuppressTryOnMessage": "隐藏试穿信息",
+    "ItemSearchConfigPreviewHousing": "启用房屋装饰预览功能",
+    "ItemSearchPreviewHousingNote": "注意：要预览房屋装饰，您必须打开'内部装修'窗口。",
+    "ItemSearchConfigPrependFilterListWithCopy": "复制结果到剪贴板时添加过滤器",
+    "ItemSearchConfigShowLegacyItems": "显示旧版物品",
+    "HideKofi": "不显示Ko-fi链接",
+    "ItemSearchConfigExternalDataSite": "外部数据网站",
+    "ItemSearchTeamcraftForceBrowser": "仅使用浏览器打开Teamcraft",
+    
+    "ItemSearchPluginMainWindowHeader": "物品搜索",
+    "ItemSearchSelectItem": "请选择一个物品。",
+    "ItemSearchListLoadFailed": "加载物品列表时出错。",
+    "DalamudItemSelectHint": "输入以开始搜索...",
+    "DalamudItemSelectLoading": "正在加载物品列表...",
+    "Choose": "选择",
+    "Close": "关闭",
+    "DalamudItemNotLinkable": "此物品不可链接。",
+    "ItemSearchTryOnButton": "试穿",
+    "ItemSearchPreviewHousing": "预览房屋装饰",
+    "ItemCount": "{0} 个物品",
+    
+    "ItemSearchCopyAsJson": "复制信息",
+    
+    "ItemSearchDataSiteViewButton": "在 {0} 上查看",
+    
+    "ItemSearchMarketButton": "市场",
+    
+    "RecipeSearchButton": "搜索制作配方",
+    
+    "CraftableJobFormat": "可制作：{0}",
+    "NotCraftable": "不可制作",
+    "SearchFilterAny": "任意",
+    
+    "DesynthableJobFormat": "可分解：{0}",
+    "NotDesynthable": "不可分解",
+    "SearchFilterAny": "任意",
+
+    "EquipAsSearchFilterSelectClasses": "无。点击此处选择职业",
+    "SearchFilterAny": "任意",
+    "SearchFilterAll": "全部",
+    "EquipAsSearchFilterFinishedSelectingClasses": "完成",
+    
+    "ItemUiCategorySearchFilterAll": "全部",
+    
+    "PatchSearchFilterSelectStat": "选择版本补丁...",
+    
+    "NotSelected": "未选择",
+    "RaceSexMale": "男性 {0}",
+    "RaceSexFemale": "女性 {0}",
+    
+    "StatSearchFilterSelectStat": "选择属性...",
+    "StatSearchFilterMatchAny": "匹配任意"
+}

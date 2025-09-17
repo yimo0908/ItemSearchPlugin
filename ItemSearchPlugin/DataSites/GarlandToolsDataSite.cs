@@ -6,6 +6,6 @@ namespace ItemSearchPlugin.DataSites {
 
         public override string NameTranslationKey => "GarlandToolsDataSite";
 
-        public override string GetItemUrl(Item item) => $"https://www.garlandtools.org/db/#item/{item.RowId}";
+        public override string GetItemUrl(Item item) => $"https://www.garlandtools.cn/db/#item/{item.RowId}";
     }
 }

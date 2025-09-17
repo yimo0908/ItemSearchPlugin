@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace ItemSearchPlugin {
     internal class Loc {
-        internal static readonly string[] ApplicableLangCodes = {"de", "ja", "fr"};
+        internal static readonly string[] ApplicableLangCodes = {"de", "ja", "fr", "zh"};
 
         private static Dictionary<string, string> localizationStrings = new Dictionary<string, string>();
 

@@ -1,0 +1,47 @@
+name: Build
+
+
+on:
+  workflow_dispatch:
+
+env:
+  PUBLIC_NAME: ItemSearchPlugin
+  SOLUTION_NAME: ItemSearchPlugin
+  INTERNAL_NAME: ItemSearchPlugin
+  RELEASE_DIR: ItemSearchPlugin\bin\x64\Release\ItemSearchPlugin
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.0.2
+
+      - name: Download Dalamud
+        run: |
+          $url = 'https://github.com/ottercorp/dalamud-distrib/raw/refs/heads/main/stg/latest.zip'
+
+          
+          Invoke-WebRequest -Uri $url -OutFile latest.zip
+          Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev\"
+
+      - name: Build
+        run: |
+          dotnet restore -r win ${{ env.SOLUTION_NAME }}.sln
+          dotnet build --configuration Release
+
+      - name: Test
+        run: |
+          dotnet test --no-restore --verbosity normal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PluginRepoZip
+          path: ${{ env.RELEASE_DIR }}
+          if-no-files-found: error

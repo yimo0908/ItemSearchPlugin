@@ -74,6 +74,7 @@ namespace ItemSearchPlugin {
                     2 => ClientLanguage.Japanese,
                     3 => ClientLanguage.French,
                     4 => ClientLanguage.German,
+                    5 => ClientLanguage.ChineseSimplified,
                     _ => ClientState.ClientLanguage,
                 };
             }
@@ -136,6 +137,7 @@ namespace ItemSearchPlugin {
                 if (ImGui.Selectable("日本語##itemLanguageOption", selectedLanguage == 2)) SelectedLanguage = 2;
                 if (ImGui.Selectable("Français##itemLanguageOption", selectedLanguage == 3)) SelectedLanguage = 3;
                 if (ImGui.Selectable("Deutsch##itemLanguageOption", selectedLanguage == 4)) SelectedLanguage = 4;
+                if (ImGui.Selectable("简体中文##itemLanguageOption", selectedLanguage == 5)) SelectedLanguage = 5;
                 if (SelectedLanguage != selectedLanguage) {
                     Save();
                 }

@@ -13,7 +13,7 @@
 	</PropertyGroup>
 	<PropertyGroup Label="Feature">
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-		<Version>1.10.3.0</Version>
+		<Version>1.10.3.1</Version>
 	</PropertyGroup>
 	<ItemGroup Label="Resources">
 		<None Include="$(SolutionDir)/Resources/**/*" CopyToOutputDirectory="PreserveNewest" Visible="false" />
@@ -47,5 +47,6 @@
 		<EmbeddedResource Include="Localization\de.json" />
 		<EmbeddedResource Include="Localization\fr.json" />
 		<EmbeddedResource Include="Localization\jp.json" />
+		<EmbeddedResource Include="Localization\zh.json" />
 	</ItemGroup>
 </Project>
