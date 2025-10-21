@@ -4,10 +4,12 @@ using System.Numerics;
 using Lumina.Excel.Sheets;
 using Dalamud.Bindings.ImGui;
 
-namespace ItemSearchPlugin.Filters {
-    class LevelItemSearchFilter : SearchFilter {
+namespace ItemSearchPlugin.Filters
+{
+    class LevelItemSearchFilter : SearchFilter
+    {
         private int MinLevel = 1;
-        private int MaxLevel = 5;
+        private int MaxLevel;
 
         private int minLevel;
         private int maxLevel;
@@ -15,21 +17,25 @@ namespace ItemSearchPlugin.Filters {
         private int lastMinLevel;
         private int lastMaxLevel;
 
-        public LevelItemSearchFilter(ItemSearchPluginConfig config) : base(config) {
-            MaxLevel = (int) PluginConfig.MaxItemLevel;
+        public LevelItemSearchFilter(ItemSearchPluginConfig config) : base(config)
+        {
+            MaxLevel = (int)PluginConfig.MaxItemLevel;
             minLevel = lastMinLevel = MinLevel;
             maxLevel = lastMaxLevel = MaxLevel;
         }
 
-        public override string Name => "Item Level";
+        public override string Name => "物品等级";
 
         public override string NameLocalizationKey => "SearchFilterLevelItem";
 
         public override bool IsSet => usingTag || minLevel != MinLevel || maxLevel != MaxLevel;
 
-        public override bool HasChanged {
-            get {
-                if (Modified || minLevel != lastMinLevel || maxLevel != lastMaxLevel) {
+        public override bool HasChanged
+        {
+            get
+            {
+                if (Modified || minLevel != lastMinLevel || maxLevel != lastMaxLevel)
+                {
                     lastMaxLevel = maxLevel;
                     lastMinLevel = minLevel;
                     Modified = false;
@@ -40,26 +46,34 @@ namespace ItemSearchPlugin.Filters {
             }
         }
 
-        public override bool CheckFilter(Item item) {
-            if (item.LevelItem.RowId > MaxLevel) {
+        public override bool CheckFilter(Item item)
+        {
+            if (item.LevelItem.RowId > MaxLevel)
+            {
                 if (maxLevel == MaxLevel) maxLevel = (int)item.LevelItem.RowId;
-                MaxLevel = (int) item.LevelItem.RowId;
+                MaxLevel = (int)item.LevelItem.RowId;
                 PluginConfig.MaxItemLevel = item.LevelItem.RowId;
                 PluginConfig.Save();
             }
-            return item.LevelItem.RowId >= (usingTag ? taggedMin : minLevel) && item.LevelItem.RowId <= (usingTag ? taggedMax : maxLevel);
+
+            return item.LevelItem.RowId >= (usingTag ? taggedMin : minLevel) &&
+                   item.LevelItem.RowId <= (usingTag ? taggedMax : maxLevel);
         }
 
-        public override void DrawEditor() {
-            ImGui.BeginChild($"{NameLocalizationKey}Child", new Vector2(-1, 23 * ImGui.GetIO().FontGlobalScale), false, usingTag ? ImGuiWindowFlags.NoInputs : ImGuiWindowFlags.None);
+        public override void DrawEditor()
+        {
+            ImGui.BeginChild($"{NameLocalizationKey}Child", new Vector2(-1, 23 * ImGui.GetIO().FontGlobalScale), false,
+                usingTag ? ImGuiWindowFlags.NoInputs : ImGuiWindowFlags.None);
 
             ImGui.PushItemWidth(-1);
             var min = usingTag ? taggedMin : minLevel;
             var max = usingTag ? taggedMax : maxLevel;
 
 
-            if (ImGui.DragIntRange2("##LevelItemSearchFilterRange", ref min, ref max, 1f, MinLevel, MaxLevel)) {
-                if (!usingTag) {
+            if (ImGui.DragIntRange2("##LevelItemSearchFilterRange", ref min, ref max, 1f, MinLevel, MaxLevel))
+            {
+                if (!usingTag)
+                {
                     minLevel = min;
                     maxLevel = max;
                     // Force ImGui to behave
@@ -74,73 +88,81 @@ namespace ItemSearchPlugin.Filters {
             ImGui.PopItemWidth();
 
             ImGui.EndChild();
-
         }
 
-        private bool usingTag = false;
+        private bool usingTag;
 
         private int taggedMin;
         private int taggedMax;
 
         public override bool IsFromTag => usingTag;
 
-        public override void ClearTags() {
+        public override void ClearTags()
+        {
             usingTag = false;
             taggedMin = 1;
             taggedMax = MaxLevel;
         }
 
-        public override bool ParseTag(string tag) {
-
+        public override bool ParseTag(string tag)
+        {
             var t = tag.ToLower().Trim();
 
-            var tags = new string[] { "ilvl", "ilevel", "itemlevel", "item level", "itemlvl", "item lvl"};
+            var tags = new [] { "ilvl", "ilevel", "itemlevel", "item level", "itemlvl", "item lvl" };
 
-            if (t.Contains(":")) {
-                var k = t.Split(new[] { ':' }, 2, StringSplitOptions.RemoveEmptyEntries);
-                if (k.Length >= 2 && tags.Contains(k[0])) {
+            if (t.Contains(":"))
+            {
+                var k = t.Split([':'] , 2, StringSplitOptions.RemoveEmptyEntries);
+                if (k.Length >= 2 && tags.Contains(k[0]))
+                {
                     t = k[1].Trim();
                     var s = t.Split('-');
 
-                    if (s.Length > 0) {
+                    if (s.Length > 0)
+                    {
                         var plus = false;
-                        if (s.Length == 1 && s[0].EndsWith("+")) {
+                        if (s.Length == 1 && s[0].EndsWith("+"))
+                        {
                             plus = true;
                             s[0] = s[0].Substring(0, s[0].Length - 1);
                         }
-                        if (!int.TryParse(s[0], out var min)) {
+
+                        if (!int.TryParse(s[0], out var min))
+                        {
                             return false;
                         }
 
                         int max;
-                        if (s.Length == 1) {
+                        if (s.Length == 1)
+                        {
                             max = plus ? MaxLevel : min;
-                        } else {
-                            if (!int.TryParse(s[1], out max)) {
+                        }
+                        else
+                        {
+                            if (!int.TryParse(s[1], out max))
+                            {
                                 return false;
                             }
                         }
 
-                        if (max < min) {
-                            var swap = max;
-                            max = min;
-                            min = swap;
+                        if (max < min)
+                        {
+                            (min, max) = (max, min);
                         }
 
                         taggedMax = max;
                         taggedMin = min;
                         usingTag = true;
                         Modified = true;
-
                     }
                 }
             }
 
             return false;
-
         }
 
-        public override string ToString() {
+        public override string ToString()
+        {
             return $"{(usingTag ? taggedMin : minLevel)} - {(usingTag ? taggedMax : maxLevel)}";
         }
     }

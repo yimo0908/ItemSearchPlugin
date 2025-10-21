@@ -2,8 +2,10 @@
 using Lumina.Excel.Sheets;
 using Dalamud.Plugin.Services;
 
-namespace ItemSearchPlugin.DataSites {
-    public class GarlandToolsDataSite(IClientState clientState) : DataSite {
+namespace ItemSearchPlugin.DataSites
+{
+    public class GarlandToolsDataSite(IClientState clientState) : DataSite
+    {
         public override string Name => "Garland Tools";
 
         public override string NameTranslationKey => "GarlandToolsDataSite";

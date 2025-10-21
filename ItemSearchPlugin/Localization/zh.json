@@ -44,13 +44,11 @@
     
     "CraftableJobFormat": "可制作：{0}",
     "NotCraftable": "不可制作",
-    "SearchFilterAny": "任意",
     
     "DesynthableJobFormat": "可分解：{0}",
     "NotDesynthable": "不可分解",
-    "SearchFilterAny": "任意",
 
-    "EquipAsSearchFilterSelectClasses": "无。点击此处选择职业",
+    "EquipAsSearchFilterSelectClasses": "点击此处选择职业",
     "SearchFilterAny": "任意",
     "SearchFilterAll": "全部",
     "EquipAsSearchFilterFinishedSelectingClasses": "完成",

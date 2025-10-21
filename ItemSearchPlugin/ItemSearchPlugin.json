@@ -1,0 +1,10 @@
+{
+  "Name": "ItemSearchPlugin",
+  "RepoUrl": "https://github.com/yimo0908/ItemSearchPlugin",
+  "Description": "可过滤的道具和关键道具搜索功能，无需寻找他人来链接即可查看任何道具。",
+  "InternalName": "ItemSearchPlugin",
+  "ApplicableVersion": "any",
+  "Tags": [ "utility", "items" ],
+  "Author": "Caraxi, maintained & updated by Khayle, localization by Yimo",
+  "Punchline": "快速搜索并链接游戏内物品。"
+}

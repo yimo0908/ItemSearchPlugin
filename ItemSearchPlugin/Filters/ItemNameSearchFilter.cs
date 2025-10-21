@@ -6,24 +6,23 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Dalamud.Utility;
 
-namespace ItemSearchPlugin.Filters {
-    class ItemNameSearchFilter : SearchFilter {
-        private string searchText;
-        private string lastSearchText;
-        private string[] searchTokens;
+namespace ItemSearchPlugin.Filters
+{
+    internal class ItemNameSearchFilter(
+        ItemSearchPluginConfig config,
+        ItemSearchWindow window,
+        string startingValue = "") : SearchFilter(config)
+    {
+        private string searchText = startingValue;
+        private string lastSearchText = string.Empty;
+        private string[]? searchTokens;
 
-        private Regex searchRegex;
+        private Regex? searchRegex;
 
         private string parsedSearchText = string.Empty;
-        private ItemSearchWindow window;
+        private readonly ItemSearchWindow window = window;
 
-        public ItemNameSearchFilter(ItemSearchPluginConfig config, ItemSearchWindow window, string startingValue = "") : base(config) {
-            searchText = startingValue;
-            lastSearchText = string.Empty;
-            this.window = window;
-        }
-        
-        public override string Name => "Search";
+        public override string Name => "搜索";
 
         public override string NameLocalizationKey => "DalamudItemSearchVerb";
 
@@ -34,11 +33,13 @@ namespace ItemSearchPlugin.Filters {
         private const char BeginTag = '[';
         private const char EndTag = ']';
 
-
-        public override bool HasChanged {
-            get {
-                if (searchText != lastSearchText) {
-                    ParseInputText(); 
+        public override bool HasChanged
+        {
+            get
+            {
+                if (searchText != lastSearchText)
+                {
+                    ParseInputText();
                     lastSearchText = searchText;
                     return true;
                 }
@@ -47,73 +48,90 @@ namespace ItemSearchPlugin.Filters {
             }
         }
 
-        public override bool CheckFilter(Item item) {
-            if (searchRegex != null) {
+        public override bool CheckFilter(Item item)
+        {
+            if (searchRegex != null)
+            {
                 return searchRegex.IsMatch(item.Name.ToString());
             }
 
             return
                 item.Name.ToString().ToLower().Contains(parsedSearchText.ToLower())
-                || (searchTokens != null && searchTokens.Length > 0 && searchTokens.All(t => item.Name.ToDalamudString().TextValue.Replace("\u0002\u001F\u0001\u0003", "-").ToLower().Contains(t)))
+                || (searchTokens is not null && searchTokens.Length > 0 && searchTokens.All(t =>
+                    item.Name.ToDalamudString().TextValue.Replace("\u0002\u001F\u0001\u0003", "-").ToLower()
+                        .Contains(t)))
                 || (int.TryParse(parsedSearchText, out var parsedId) && parsedId == item.RowId)
-                || searchText.StartsWith("$") && item.Description.ToString().ToLower().Contains(parsedSearchText.Substring(1).ToLower());
+                || searchText.StartsWith("$") && item.Description.ToString().ToLower()
+                    .Contains(parsedSearchText.Substring(1).ToLower());
         }
-        
-        public override bool CheckFilter(EventItem item) {
-            if (searchRegex != null) {
+
+        public override bool CheckFilter(EventItem item)
+        {
+            if (searchRegex != null)
+            {
                 return searchRegex.IsMatch(item.Name.ToString());
             }
 
             return
                 item.Name.ToString().ToLower().Contains(parsedSearchText.ToLower())
-                || (searchTokens != null && searchTokens.Length > 0 && searchTokens.All(t => item.Name.ToDalamudString().TextValue.Replace("\u0002\u001F\u0001\u0003", "-").ToLower().Contains(t)))
+                || (searchTokens is not null && searchTokens.Length > 0 && searchTokens.All(t =>
+                    item.Name.ToDalamudString().TextValue.Replace("\u0002\u001F\u0001\u0003", "-").ToLower()
+                        .Contains(t)))
                 || (int.TryParse(parsedSearchText, out var parsedId) && parsedId == item.RowId);
-                //|| searchText.StartsWith("$") && item.Description.ToString().ToLower().Contains(parsedSearchText.Substring(1).ToLower());
         }
-        
-        public override void DrawEditor() {
+
+        public override void DrawEditor()
+        {
             ImGui.SetNextItemWidth(-20 * ImGui.GetIO().FontGlobalScale);
-            if (PluginConfig.AutoFocus && ImGui.IsWindowAppearing()) {
+            if (PluginConfig.AutoFocus && ImGui.IsWindowAppearing())
+            {
                 ImGui.SetKeyboardFocusHere();
             }
-            var input = ImGui.InputText("##ItemNameSearchFilter", ref searchText, 256);
+
+            ImGui.InputText("##ItemNameSearchFilter", ref searchText, 256);
 
             ImGui.SameLine();
             ImGui.TextDisabled("(?)");
-            if (ImGui.IsItemHovered()) {
+            if (ImGui.IsItemHovered())
+            {
                 ImGui.BeginTooltip();
-                ImGui.Text("Type an item name to search for items by name.");
+                ImGui.Text("输入物品名称以按名称搜索物品。");
                 ImGui.SameLine();
-                ImGui.TextDisabled("\"OMG\"");
-                ImGui.Text("Type an item id to search for item by its ID.");
+                ImGui.TextDisabled("\"欧米茄\"");
+                ImGui.Text("输入物品id以按id搜索物品。.");
                 ImGui.SameLine();
                 ImGui.TextDisabled("\"23991\"");
-                ImGui.Text("Start input with '$' to search for an item by its description.");
+                ImGui.Text("以'$'开头输入以按描述搜索物品。");
                 ImGui.SameLine();
-                ImGui.TextDisabled("\"$Weird.\"");
-                ImGui.Text("Start and end with '/' to search using regex.");
+                ImGui.TextDisabled("\"$宠物\"");
+                ImGui.Text("以'/'开头和结尾使用正则表达式搜索。");
                 ImGui.SameLine();
-                ImGui.TextDisabled("\"/^.M.$/\"");
-
+                ImGui.TextDisabled("\"/^.*迷你/\"");
 
                 ImGui.EndTooltip();
             }
-
         }
 
-        public override string ToString() {
+        public override string ToString()
+        {
             return searchText;
         }
 
-        public void ParseInputText() {
+        private void ParseInputText()
+        {
             window.SearchFilters.ForEach(f => f.ClearTags());
-            
+
             searchRegex = null;
-            if (searchText.Length >= 3 && searchText.StartsWith("/") && searchText.EndsWith("/")) {
-                try {
-                    searchRegex = new Regex(searchText.Substring(1, searchText.Length - 2), RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (searchText.Length >= 3 && searchText.StartsWith("/") && searchText.EndsWith("/"))
+            {
+                try
+                {
+                    searchRegex = new Regex(searchText.Substring(1, searchText.Length - 2),
+                        RegexOptions.IgnoreCase | RegexOptions.Singleline);
                     return;
-                } catch (Exception) {
+                }
+                catch (Exception)
+                {
                     searchRegex = null;
                 }
             }
@@ -121,60 +139,84 @@ namespace ItemSearchPlugin.Filters {
             searchTokens = searchText.Trim().ToLower().Split(' ').Where(t => !string.IsNullOrEmpty(t)).ToArray();
 
             parsedSearchText = string.Empty;
-            string currentTag = null;
+            string? currentTag = null;
             var tags = new List<string>();
 
-            foreach (var c in searchText) {
-                switch (c) {
-                    case BeginTag: {
-                        if (currentTag == null) {
+            foreach (var c in searchText)
+            {
+                switch (c)
+                {
+                    case BeginTag:
+                    {
+                        if (currentTag == null)
+                        {
                             currentTag = "";
-                        } else {
-                            if (currentTag == "") {
+                        }
+                        else
+                        {
+                            if (currentTag == "")
+                            {
                                 parsedSearchText += BeginTag;
-                            } else {
+                            }
+                            else
+                            {
                                 parsedSearchText += $"{BeginTag}{currentTag}{BeginTag}";
                             }
+
                             currentTag = null;
                         }
 
                         break;
                     }
-                    case EndTag: {
-                        if (currentTag == null) {
+                    case EndTag:
+                    {
+                        if (currentTag == null)
+                        {
                             parsedSearchText += EndTag;
-                        } else {
-                            if (currentTag.Length > 0) {
+                        }
+                        else
+                        {
+                            if (currentTag.Length > 0)
+                            {
                                 tags.Add(currentTag.Trim());
-                            } else {
+                            }
+                            else
+                            {
                                 parsedSearchText += $"{BeginTag}{EndTag}";
                             }
+
                             currentTag = null;
                         }
+
                         break;
                     }
-                    default: {
-                        if (currentTag == null) {
+                    default:
+                    {
+                        if (currentTag == null)
+                        {
                             parsedSearchText += c;
-                        } else {
+                        }
+                        else
+                        {
                             currentTag += c;
                         }
+
                         break;
                     }
                 }
             }
 
-            if (currentTag != null) {
+            if (currentTag != null)
+            {
                 parsedSearchText += $"{BeginTag}{currentTag}";
             }
 
-            foreach (var t in tags) {
+            foreach (var t in tags)
+            {
                 window.SearchFilters.ForEach(f => f.ParseTag(t));
             }
 
             parsedSearchText = parsedSearchText.Trim();
         }
-
-
     }
 }

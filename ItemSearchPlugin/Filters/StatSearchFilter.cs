@@ -5,21 +5,20 @@ using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using Dalamud.Bindings.ImGui;
 using Lumina.Excel.Sheets;
-using static ItemSearchPlugin.Filters.PatchSearchFilter;
 
 namespace ItemSearchPlugin.Filters {
     internal class StatSearchFilter : SearchFilter {
-        public class Stat {
+        private class Stat {
             public BaseParam BaseParam;
             public int BaseParamIndex;
         }
 
-        private BaseParam[] baseParams;
+        private BaseParam[]? baseParams;
 
         private bool modeAny;
 
 
-        public List<Stat> Stats = new List<Stat>();
+        private List<Stat> Stats = new List<Stat>();
 
         private Dictionary<string, string> StatAlias = new Dictionary<string, string>() {
             { "str", "strength" },
@@ -40,11 +39,9 @@ namespace ItemSearchPlugin.Filters {
             Task.Run(() => {
                 var baseParamCounts = new Dictionary<uint, int>();
 
-                foreach (var p in data.GetExcelSheet<Item>().ToList().SelectMany(i => i.BaseParam)) {
-                    if (!baseParamCounts.ContainsKey(p.RowId)) {
-                        baseParamCounts.Add(p.RowId, 0);
-                    }
-
+                foreach (var p in data.GetExcelSheet<Item>().ToList().SelectMany(i => i.BaseParam))
+                {
+                    baseParamCounts.TryAdd(p.RowId, 0);
                     baseParamCounts[p.RowId] += 1;
                 }
 
@@ -53,7 +50,7 @@ namespace ItemSearchPlugin.Filters {
             });
         }
 
-        public override string Name => "Has Stats";
+        public override string Name => "具有属性";
         public override string NameLocalizationKey => "StatSearchFilter";
         public override bool IsSet => Stats.Count > 0 && Stats.Any(s => s.BaseParam.RowId != 0);
 
@@ -100,7 +97,7 @@ namespace ItemSearchPlugin.Filters {
             }
 
 
-            Stat doRemove = null;
+            Stat? doRemove = null;
             var i = 0;
             foreach (var stat in Stats) {
                 if (!usingTags && ImGui.Button($"-###statSearchFilterRemove{i++}", btnSize)) doRemove = stat;
@@ -135,7 +132,7 @@ namespace ItemSearchPlugin.Filters {
                 Modified = true;
             }
 
-            Stats = Stats.DistinctBy(p => p.BaseParam).OrderByDescending(p => p.BaseParamIndex).ToList();
+            Stats = Stats.DistinctBy(p => p.BaseParam.RowId).OrderByDescending(p => p.BaseParamIndex).ToList();
 
             if (Stats.Count > 1) {
                 ImGui.SameLine();
@@ -145,13 +142,13 @@ namespace ItemSearchPlugin.Filters {
             }
         }
 
-        private bool usingTags = false;
+        private bool usingTags;
 
-        private List<Stat> nonTagStats;
+        private List<Stat>? nonTagStats;
 
         public override void ClearTags() {
             if (usingTags) {
-                Stats = nonTagStats;
+                Stats = nonTagStats ?? new List<Stat>();
                 usingTags = false;
             }
         }
@@ -159,24 +156,24 @@ namespace ItemSearchPlugin.Filters {
         public override bool IsFromTag => usingTags;
 
         public override bool ParseTag(string tag) {
+            if (baseParams == null) return false; // 添加空值检查
             var t = tag.ToLower().Trim();
-            if (StatAlias.ContainsKey(t)) t = StatAlias[t];
+            if (StatAlias.TryGetValue(t, out var alias)) { t = alias; }
             foreach (var bp in baseParams) {
-                if (bp.Name.ToString().ToLower() == t) {
-                    var stat = new Stat() { BaseParam = bp };
-
-                    if (!usingTags) {
-                        nonTagStats = Stats;
-                        usingTags = true;
-                        Stats = new List<Stat>();
-                    }
-
-                    Stats.Add(stat);
+                if (bp.Name.ToString().ToLower() != t) continue;
+                var stat = new Stat() { BaseParam = bp };
+                    
+                if (!usingTags) {
+                    nonTagStats = Stats;
+                    usingTags = true;
+                    Stats = new List<Stat>();
                 }
+                Stats.Add(stat);
+                
             }
-
             return false;
         }
+
 
         public override string ToString() {
             return string.Join(", ", Stats.Select(s => s.BaseParam.Name));

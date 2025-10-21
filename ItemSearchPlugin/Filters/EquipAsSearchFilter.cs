@@ -1,5 +1,4 @@
-﻿using Dalamud.Plugin;
-using Dalamud.Bindings.ImGui;
+﻿using Dalamud.Bindings.ImGui;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
@@ -7,8 +6,10 @@ using System.Linq;
 using System.Text;
 using Dalamud.Plugin.Services;
 
-namespace ItemSearchPlugin.Filters {
-    class EquipAsSearchFilter : SearchFilter {
+namespace ItemSearchPlugin.Filters
+{
+    class EquipAsSearchFilter : SearchFilter
+    {
         private List<uint> selectedClassJobs;
         private readonly List<ClassJobCategory> classJobCategories;
         private readonly List<ClassJob> classJobs;
@@ -16,13 +17,16 @@ namespace ItemSearchPlugin.Filters {
         private bool selectingClasses;
         private int selectedMode;
 
-        public EquipAsSearchFilter(ItemSearchPluginConfig config, IDataManager data) : base(config) {
+        public EquipAsSearchFilter(ItemSearchPluginConfig config, IDataManager data) : base(config)
+        {
             selectedClassJobs = new List<uint>();
             classJobCategories = data.GetExcelSheet<ClassJobCategory>().ToList();
             classJobs = data.GetExcelSheet<ClassJob>()
                 .Where(cj => cj.RowId != 0)
-                .OrderBy(cj => {
-                    return cj.Role switch {
+                .OrderBy(cj =>
+                {
+                    return cj.Role switch
+                    {
                         0 => 3,
                         1 => 0,
                         2 => 2,
@@ -34,15 +38,18 @@ namespace ItemSearchPlugin.Filters {
             changed = false;
         }
 
-        public override string Name => "Equip as";
+        public override string Name => "装备职业";
 
         public override string NameLocalizationKey => "EquipAsSearchFilter";
 
         public override bool IsSet => selectedClassJobs.Count >= 1;
 
-        public override bool HasChanged {
-            get {
-                if (changed) {
+        public override bool HasChanged
+        {
+            get
+            {
+                if (changed)
+                {
                     changed = false;
                     return true;
                 }
@@ -51,87 +58,116 @@ namespace ItemSearchPlugin.Filters {
             }
         }
 
-        public override bool CheckFilter(Item item) {
-            try {
-                if (item.ClassJobCategory.RowId != 0) {
-                    ClassJobCategory cjc = classJobCategories[(int) item.ClassJobCategory.RowId];
+        public override bool CheckFilter(Item item)
+        {
+            try
+            {
+                if (item.ClassJobCategory.RowId != 0)
+                {
+                    ClassJobCategory cjc = classJobCategories[(int)item.ClassJobCategory.RowId];
 
-                    if (selectedMode == 0) {
-                        foreach (uint cjid in selectedClassJobs) {
-                            if (cjc.HasClass(cjid)) {
+                    if (selectedMode == 0)
+                    {
+                        foreach (uint cjid in selectedClassJobs)
+                        {
+                            if (cjc.HasClass(cjid))
+                            {
                                 return true;
                             }
                         }
 
                         return false;
-                    } else {
-                        foreach (uint cjid in selectedClassJobs) {
-                            if (!cjc.HasClass(cjid)) {
+                    }
+                    else
+                    {
+                        foreach (uint cjid in selectedClassJobs)
+                        {
+                            if (!cjc.HasClass(cjid))
+                            {
                                 return false;
                             }
                         }
 
                         return true;
                     }
-                } else {
+                }
+                else
+                {
                     return false;
                 }
-            } catch (Exception) {
+            }
+            catch (Exception)
+            {
                 return false;
             }
         }
 
-        private string SelectedClassString() {
+        private string SelectedClassString()
+        {
             StringBuilder sb = new StringBuilder();
             bool first = true;
-            foreach (var i in selectedClassJobs) {
-                if (!first) {
+            foreach (var i in selectedClassJobs)
+            {
+                if (!first)
+                {
                     sb.Append(", ");
                 }
 
                 first = false;
                 var cj = classJobs.FirstOrDefault(c => c.RowId == i);
-                sb.Append(cj.Abbreviation);
+                sb.Append(cj.Name);
             }
 
-            if (first) {
+            if (first)
+            {
                 sb.Append(Loc.Localize("EquipAsSearchFilterSelectClasses", "None. Click here to select classes"));
             }
 
             return sb.ToString();
         }
 
-        public override void DrawEditor() {
+        public override void DrawEditor()
+        {
             ImGui.SetNextItemWidth(60 * ImGui.GetIO().FontGlobalScale);
-            if (ImGui.Combo("###equipAsSearchFilterModeCombo", ref selectedMode, new[] {
-                Loc.Localize("SearchFilterAny", "Any"),
-                Loc.Localize("SearchFilterAll", "All"),
-            }, 2)) {
+            if (ImGui.Combo("###equipAsSearchFilterModeCombo", ref selectedMode, new[]
+                {
+                    Loc.Localize("SearchFilterAny", "Any"),
+                    Loc.Localize("SearchFilterAll", "All"),
+                }, 2))
+            {
                 changed = true;
             }
 
             ImGui.SameLine();
 
-            if (usingTags) {
+            if (usingTags)
+            {
                 ImGui.Text(SelectedClassString());
             }
 
 
-            if (usingTags == false && ImGui.SmallButton($"{(selectingClasses ? Loc.Localize("EquipAsSearchFilterFinishedSelectingClasses", "Done") : SelectedClassString())}###equipAsChangeClassButton")) {
+            if (usingTags == false &&
+                ImGui.SmallButton(
+                    $"{(selectingClasses ? Loc.Localize("EquipAsSearchFilterFinishedSelectingClasses", "Done") : SelectedClassString())}###equipAsChangeClassButton"))
+            {
                 selectingClasses = !selectingClasses;
                 changed = true;
             }
 
-            if (usingTags == false && selectingClasses) {
+            if (usingTags == false && selectingClasses)
+            {
                 float wWidth = ImGui.GetWindowWidth();
 
                 float firstColumnWith = ImGui.GetColumnWidth(0);
 
                 ImGui.SameLine();
 
-                if (ImGui.SmallButton("Select All")) {
-                    foreach (ClassJob cj in classJobs) {
-                        if (cj.RowId != 0 && !selectedClassJobs.Contains(cj.RowId)) {
+                if (ImGui.SmallButton("Select All"))
+                {
+                    foreach (ClassJob cj in classJobs)
+                    {
+                        if (cj.RowId != 0 && !selectedClassJobs.Contains(cj.RowId))
+                        {
                             selectedClassJobs.Add(cj.RowId);
                             changed = true;
                         }
@@ -139,28 +175,40 @@ namespace ItemSearchPlugin.Filters {
                 }
 
                 ImGui.SameLine();
-                if (ImGui.SmallButton("Select None")) {
+                if (ImGui.SmallButton("Select None"))
+                {
                     selectedClassJobs.Clear();
                     changed = true;
                 }
-                
-                ImGui.Columns(Math.Max(3, (int) (wWidth / (80 * ImGui.GetIO().FontGlobalScale))), "###equipAsClassList", false);
+
+                ImGui.Columns(Math.Max(3, (int)(wWidth / (80 * ImGui.GetIO().FontGlobalScale))), "###equipAsClassList",
+                    false);
                 ImGui.SetColumnWidth(0, firstColumnWith);
-                try {
-                    foreach (ClassJob cj in classJobs) {
-                        if (cj.RowId != 0) {
-                            if (ImGui.GetColumnIndex() == 0) {
+                try
+                {
+                    foreach (ClassJob cj in classJobs)
+                    {
+                        if (cj.RowId != 0)
+                        {
+                            if (ImGui.GetColumnIndex() == 0)
+                            {
                                 ImGui.NextColumn();
                             }
 
                             bool selected = selectedClassJobs.Contains(cj.RowId);
-                            if (ImGui.Checkbox(cj.Abbreviation.ToString(), ref selected)) {
-                                if (selected) {
-                                    if (!selectedClassJobs.Contains(cj.RowId)) {
+                            if (ImGui.Checkbox(cj.Name.ToString(), ref selected))
+                            {
+                                if (selected)
+                                {
+                                    if (!selectedClassJobs.Contains(cj.RowId))
+                                    {
                                         selectedClassJobs.Add(cj.RowId);
                                     }
-                                } else {
-                                    if (selectedClassJobs.Contains(cj.RowId)) {
+                                }
+                                else
+                                {
+                                    if (selectedClassJobs.Contains(cj.RowId))
+                                    {
                                         selectedClassJobs.Remove(cj.RowId);
                                     }
                                 }
@@ -171,16 +219,22 @@ namespace ItemSearchPlugin.Filters {
                             ImGui.NextColumn();
                         }
                     }
-                } catch (NullReferenceException nre) {
+                }
+                catch (NullReferenceException nre)
+                {
                     PluginLog.Error(nre.ToString());
                 }
 
                 ImGui.Columns(2);
                 ImGui.SetColumnWidth(0, firstColumnWith);
-            } else if(usingTags == false && ClientState.LocalContentId != 0) {
+            }
+            else if (usingTags == false && ClientState.LocalContentId != 0)
+            {
                 ImGui.SameLine();
-                if (ImGui.SmallButton("Current Class")) {
-                    if (ClientState?.LocalPlayer != null) {
+                if (ImGui.SmallButton("当前职业"))
+                {
+                    if (ClientState.LocalPlayer != null)
+                    {
                         selectedClassJobs.Clear();
                         selectedClassJobs.Add(ClientState.LocalPlayer.ClassJob.RowId);
                         changed = true;
@@ -190,31 +244,37 @@ namespace ItemSearchPlugin.Filters {
         }
 
 
-        private bool usingTags = false;
+        private bool usingTags;
 
-        private List<uint> nonTagSelection;
+        private List<uint>? nonTagSelection;
 
-        public override void ClearTags() {
-            if (usingTags) {
-                selectedClassJobs = nonTagSelection;
+        public override void ClearTags()
+        {
+            if (usingTags)
+            {
+                selectedClassJobs = nonTagSelection ?? new List<uint>();
                 usingTags = false;
             }
         }
 
         public override bool IsFromTag => usingTags;
 
-        public override bool ParseTag(string tag) {
+        public override bool ParseTag(string tag)
+        {
             var t = tag.ToLower().Trim();
             var selfTag = false;
-            if (t == "self" && ClientState?.LocalPlayer != null) {
-                t = ClientState.LocalPlayer.ClassJob.Value.Abbreviation.ToString().ToLower();
+            if (t == "self" && ClientState.LocalPlayer != null)
+            {
+                t = ClientState.LocalPlayer.ClassJob.Value.Name.ToString().ToLower();
                 selfTag = true;
             }
 
-            foreach (var bp in classJobs) {
-                if (bp.Abbreviation.ToString().ToLower() == t) {
-
-                    if (!usingTags) {
+            foreach (var bp in classJobs)
+            {
+                if (bp.Name.ToString().ToLower() == t)
+                {
+                    if (!usingTags)
+                    {
                         nonTagSelection = selectedClassJobs;
                         selectedClassJobs = new List<uint>();
                     }
@@ -230,8 +290,10 @@ namespace ItemSearchPlugin.Filters {
 
         public override bool GreyWithTags => false;
 
-        public override string ToString() {
-            return $"{(selectedMode == 0 ? "Any of" : "All of")} [{string.Join(", ", classJobs.Where(cj => selectedClassJobs.Contains(cj.RowId)).Select(cj => cj.Abbreviation))}]";
+        public override string ToString()
+        {
+            return
+                $"{(selectedMode == 0 ? "Any of" : "All of")} [{string.Join(", ", classJobs.Where(cj => selectedClassJobs.Contains(cj.RowId)).Select(cj => cj.Name))}]";
         }
     }
 }

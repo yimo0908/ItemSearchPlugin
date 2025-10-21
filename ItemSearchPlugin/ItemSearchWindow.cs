@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using Dalamud.Bindings.ImGui;
@@ -17,10 +16,11 @@ using ItemSearchPlugin.ActionButtons;
 using ItemSearchPlugin.Filters;
 using Lumina.Excel.Sheets;
 
-namespace ItemSearchPlugin {
-    internal class ItemSearchWindow : IDisposable {
+namespace ItemSearchPlugin
+{
+    internal class ItemSearchWindow : IDisposable
+    {
         private readonly ItemSearchPlugin plugin;
-        private readonly IDalamudPluginInterface pluginInterface;
         private readonly IDataManager data;
         private GenericItem? selectedItem;
         private int selectedItemIndex = -1;
@@ -29,18 +29,18 @@ namespace ItemSearchPlugin {
         private ValueTask<List<GenericItem>> searchTask;
 
         private readonly ItemSearchPluginConfig pluginConfig;
-        public List<SearchFilter> SearchFilters;
-        public List<IActionButton> ActionButtons;
+        public readonly List<SearchFilter> SearchFilters;
+        private readonly List<IActionButton> actionButtons;
 
         private bool autoTryOn;
-        public bool autoPreviewHousing;
+        private bool autoPreviewHousing;
         private int debounceKeyPress;
         private bool doSearchScroll;
         private bool forceReload;
 
         private bool errorLoadingItems;
 
-        private bool triedLoadingItems = false;
+        private bool triedLoadingItems;
 
         private int styleCounter;
 
@@ -49,140 +49,156 @@ namespace ItemSearchPlugin {
         private readonly List<Stain> stains;
         private bool showStainSelector;
         private byte selectedStainTab = 2;
-        private byte stainIndex = 0;
+        private byte stainIndex;
         private readonly Dictionary<byte, Vector4> stainShadeHeaders;
 
         private bool extraFiltersExpanded;
-        private bool showingFavourites = false;
+        private bool showingFavourites;
 
-        private List<GenericItem> favouritesList = new List<GenericItem>();
+        private List<GenericItem> favouritesList = new();
 
-        private void PushStyle(ImGuiStyleVar styleVar, Vector2 val) {
+        private void PushStyle(ImGuiStyleVar styleVar, Vector2 val)
+        {
             ImGui.PushStyleVar(styleVar, val);
             styleCounter += 1;
         }
 
-        private void PushStyle(ImGuiStyleVar styleVar, float val) {
+        private void PushStyle(ImGuiStyleVar styleVar, float val)
+        {
             ImGui.PushStyleVar(styleVar, val);
             styleCounter += 1;
         }
 
-        private void PopStyle() {
+        private void PopStyle()
+        {
             if (styleCounter <= 0) return;
             ImGui.PopStyleVar();
             styleCounter -= 1;
         }
 
-        private void PopStyle(int count) {
-            if (count > styleCounter) count = styleCounter;
-            ImGui.PopStyleVar(count);
-            styleCounter -= count;
-        }
+        // private void PopStyle(int count)
+        // {
+        //     if (count > styleCounter) count = styleCounter;
+        //     ImGui.PopStyleVar(count);
+        //     styleCounter -= count;
+        // }
 
-        private void ResetStyle() {
+        private void ResetStyle()
+        {
             if (styleCounter <= 0) return;
             ImGui.PopStyleVar(styleCounter);
             styleCounter = 0;
         }
 
-        public ItemSearchWindow(ItemSearchPlugin plugin, string searchText = "") {
-            pluginInterface = PluginInterface;
+        public ItemSearchWindow(ItemSearchPlugin plugin, string searchText = "")
+        {
             data = Data;
             pluginConfig = plugin.PluginConfig;
             this.plugin = plugin;
             extraFiltersExpanded = pluginConfig.ExpandedFilters;
-            autoTryOn = pluginConfig.ShowTryOn && pluginConfig.TryOnEnabled;
-            autoPreviewHousing = pluginConfig.ShowPreviewHousing && pluginConfig.PreviewHousingEnabled;
-            
+            autoTryOn = (pluginConfig.ShowTryOn, pluginConfig.TryOnEnabled) is (true, true);
+            autoPreviewHousing = (pluginConfig.ShowPreviewHousing, pluginConfig.PreviewHousingEnabled) is (true, true);
+            searchCancelTokenSource = new CancellationTokenSource();
             stains = data.Excel.GetSheet<Stain>().ToList();
             FixStainsOrder();
 
-            if (pluginConfig.SelectedStain > 0) {
+            if (pluginConfig.SelectedStain > 0)
+            {
                 selectedStain = stains.FirstOrDefault(s => s.RowId == pluginConfig.SelectedStain);
-                if (selectedStain != null) {
+                if (selectedStain != null)
+                {
                     selectedStainTab = selectedStain.Value.Shade;
                 }
             }
-            if (pluginConfig.SelectedStain2 > 0) {
+
+            if (pluginConfig.SelectedStain2 > 0)
+            {
                 selectedStain2 = stains.FirstOrDefault(s => s.RowId == pluginConfig.SelectedStain2);
             }
 
 
-            stainShadeHeaders = new Dictionary<byte, Vector4> {
-                {2, new Vector4(1, 1, 1, 1)},
-                {4, new Vector4(1, 0, 0, 1)},
-                {5, new Vector4(0.75f, 0.5f, 0.3f, 1)},
-                {6, new Vector4(1f, 1f, 0.1f, 1)},
-                {7, new Vector4(0.5f, 1f, 0.25f, 1f)},
-                {8, new Vector4(0.3f, 0.5f, 1f, 1f)},
-                {9, new Vector4(0.7f, 0.45f, 0.9f, 1)},
-                {10, new Vector4(1f, 1f, 1f, 1f)}
+            stainShadeHeaders = new Dictionary<byte, Vector4>
+            {
+                { 2, new Vector4(1, 1, 1, 1) },
+                { 4, new Vector4(1, 0, 0, 1) },
+                { 5, new Vector4(0.75f, 0.5f, 0.3f, 1) },
+                { 6, new Vector4(1f, 1f, 0.1f, 1) },
+                { 7, new Vector4(0.5f, 1f, 0.25f, 1f) },
+                { 8, new Vector4(0.3f, 0.5f, 1f, 1f) },
+                { 9, new Vector4(0.7f, 0.45f, 0.9f, 1) },
+                { 10, new Vector4(1f, 1f, 1f, 1f) }
             };
-            
-            SearchFilters = new List<SearchFilter> {
+
+            SearchFilters =
+            [
                 new ItemNameSearchFilter(pluginConfig, this, searchText),
                 new ItemUICategorySearchFilter(pluginConfig, data),
                 new LevelEquipSearchFilter(pluginConfig),
-                new LevelItemSearchFilter(pluginConfig),    
+                new LevelItemSearchFilter(pluginConfig),
                 new PatchSearchFilter(pluginConfig),
                 new RaritySearchFilter(pluginConfig),
                 new EquipAsSearchFilter(pluginConfig, data),
-                new RaceSexSearchFilter(pluginConfig, data, pluginInterface),
+                new RaceSexSearchFilter(pluginConfig, data),
                 new CraftableSearchFilter(pluginConfig, data),
                 new DesynthableSearchFilter(pluginConfig, data),
                 new SoldByNPCSearchFilter(pluginConfig, data),
                 new DyeableSearchFilter(pluginConfig),
-                new BooleanSearchFilter(pluginConfig, "Can Be HQ", "Has HQ", "No HQ", BooleanSearchFilter.CheckFunc("CanBeHq")),
-                new BooleanSearchFilter(pluginConfig, "Unique", "Unique", "Not Unique", BooleanSearchFilter.CheckFunc("IsUnique")),
-                new BooleanSearchFilter(pluginConfig, "Tradable", "Tradable", "Not Tradable", BooleanSearchFilter.CheckFunc("IsUntradable", true)),
-                new BooleanSearchFilter(pluginConfig, "Key Item", "Key Item", "Normal Item", ((item, t, f) => !t), ((item, t, f) => !f)),
-                new BooleanSearchFilter(pluginConfig, "Favourites", "Favourite", "Not Favourite", (i, t, f) => pluginConfig.Favorites.Contains(i.RowId) ? t : f),
-                new BooleanSearchFilter(pluginConfig, "Store Item", "On Store", "Not On Store", (item, t, f) => {
-                    if (t) {
-                        return FfxivStoreActionButton.StoreItems.ContainsKey(item.RowId);
-                    }
-                    return !FfxivStoreActionButton.StoreItems.ContainsKey(item.RowId);
-                }) { VisibleFunction = () => pluginConfig.EnableFFXIVStore },
+                new BooleanSearchFilter(pluginConfig, "有无HQ属性", "有HQ属性", "无HQ属性",
+                    BooleanSearchFilter.CheckFunc("CanBeHq")),
+                new BooleanSearchFilter(pluginConfig, "珍惜属性", "珍惜", "非珍惜占",
+                    BooleanSearchFilter.CheckFunc("IsUnique")),
+                new BooleanSearchFilter(pluginConfig, "交易属性", "可交易", "不可交易",
+                    BooleanSearchFilter.CheckFunc("IsUntradable", true)),
+                new BooleanSearchFilter(pluginConfig, "Key Item", "Key Item", "Normal Item", ((_, t, _) => !t),
+                    ((_, _, f) => !f)),
+                new BooleanSearchFilter(pluginConfig, "Favourites", "Favourite", "Not Favourite",
+                    (i, t, f) => pluginConfig.Favorites.Contains(i.RowId) ? t : f),
                 new StatSearchFilter(pluginConfig, data),
-                // new CollectableSearchFilter(pluginConfig, plugin),
-            };
+            ];
 
             SearchFilters.ForEach(a => a.ConfigSetup());
 
-            ActionButtons = new List<IActionButton> {   
+            actionButtons =
+            [
                 new MarketBoardActionButton(pluginConfig),
                 new DataSiteActionButton(pluginConfig),
                 new RecipeSearchActionButton(plugin.CraftingRecipeFinder),
-                new FfxivStoreActionButton(pluginConfig),
-                new CopyItemAsJson(plugin),
-            };
+                //new FfxivStoreActionButton(pluginConfig),
+                new CopyItemAsJson(),
+            ];
         }
 
         private SortType sortType;
-        
-        private void UpdateItemList(int delay = 100) {
+
+        private void UpdateItemList(int delay = 100)
+        {
             sortType = pluginConfig.SortType;
             PluginLog.Debug("Loading Item List");
             triedLoadingItems = true;
             errorLoadingItems = false;
-            plugin.LuminaItems = null;
+            plugin.LuminaItems = null!;
             plugin.LuminaItemsClientLanguage = pluginConfig.SelectedClientLanguage;
 #if DEBUG
             var sw = new Stopwatch();
 #endif
-            Task.Run(async () => {
-
+            Task.Run(async () =>
+            {
                 await Task.Delay(delay);
 #if DEBUG
                 sw.Start();
 #endif
-                try {
+                try
+                {
                     var list = new List<GenericItem>();
-                    
-                    list.AddRange(data.GetExcelSheet<Item>(pluginConfig.SelectedClientLanguage).Where(i => i.RowId > 0 && !string.IsNullOrEmpty(i.Name.ToString())).Select(i => new GenericItem(i)));
-                    list.AddRange(data.GetExcelSheet<EventItem>(pluginConfig.SelectedClientLanguage).Where(i => !string.IsNullOrEmpty(i.Name.ToString())).Select(i => new GenericItem(i)));
 
-                    var sortedList = pluginConfig.SortType switch {
+                    list.AddRange(data.GetExcelSheet<Item>(pluginConfig.SelectedClientLanguage)
+                        .Where(i => i.RowId > 0 && !string.IsNullOrEmpty(i.Name.ToString()))
+                        .Select(i => new GenericItem(i)));
+                    list.AddRange(data.GetExcelSheet<EventItem>(pluginConfig.SelectedClientLanguage)
+                        .Where(i => !string.IsNullOrEmpty(i.Name.ToString())).Select(i => new GenericItem(i)));
+
+                    var sortedList = pluginConfig.SortType switch
+                    {
                         SortType.ItemIDDesc => list.OrderByDescending(i => i.RowId),
                         SortType.Name => list.OrderBy(i => i.Name),
                         SortType.NameDesc => list.OrderByDescending(i => i.Name),
@@ -192,21 +208,25 @@ namespace ItemSearchPlugin {
                         SortType.EquipLevelDesc => list.OrderByDescending(i => i.LevelEquip),
                         _ => list.OrderBy(i => i.RowId),
                     };
-                    
-                    
+
+
                     return sortedList.ToList();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     errorLoadingItems = true;
                     PluginLog.Error("Failed loading Items");
                     PluginLog.Error(ex.ToString());
                     return new List<GenericItem>();
                 }
-            }).ContinueWith(t => {
+            }).ContinueWith(t =>
+            {
 #if DEBUG
                 sw.Stop();
                 PluginLog.Debug($"Loaded Item List in: {sw.ElapsedMilliseconds}ms");
 #endif
-                if (errorLoadingItems) {
+                if (errorLoadingItems)
+                {
                     return plugin.LuminaItems;
                 }
 
@@ -215,20 +235,26 @@ namespace ItemSearchPlugin {
             });
         }
 
-        public unsafe Vector4 HSVtoRGB(Vector4 hsv) {
+        public unsafe Vector4 HSVtoRGB(Vector4 hsv)
+        {
             float r, g, b;
             ImGui.ColorConvertHSVtoRGB(hsv.X, hsv.Y, hsv.Z, &r, &g, &b);
             return new Vector4(r, g, b, hsv.W);
         }
 
-        public bool Draw() {
+        public bool Draw()
+        {
             var isOpen = true;
 
-            try {
+            try
+            {
                 var isSearch = false;
-                if (triedLoadingItems == false || pluginConfig.SelectedClientLanguage != plugin.LuminaItemsClientLanguage || pluginConfig.SortType != sortType) UpdateItemList(1000);
+                if (triedLoadingItems == false ||
+                    pluginConfig.SelectedClientLanguage != plugin.LuminaItemsClientLanguage ||
+                    pluginConfig.SortType != sortType) UpdateItemList(1000);
 
-                if ((selectedItemIndex < 0 && selectedItem != null) || (selectedItemIndex >= 0 && selectedItem == null)) {
+                if ((selectedItemIndex < 0 && selectedItem != null) || (selectedItemIndex >= 0 && selectedItem == null))
+                {
                     // Should never happen, but just incase
                     selectedItemIndex = -1;
                     selectedItem = null;
@@ -236,18 +262,22 @@ namespace ItemSearchPlugin {
                 }
 
                 ImGui.SetNextWindowSize(new Vector2(500, 500), ImGuiCond.FirstUseEver);
-                
+
                 PushStyle(ImGuiStyleVar.WindowMinSize, new Vector2(350, 400));
 
-                ImGui.Begin(Loc.Localize("ItemSearchPluginMainWindowHeader", $"Item Search") + "###itemSearchPluginMainWindow", ref isOpen, ImGuiWindowFlags.None);
-                if (!isOpen) {
+                ImGui.Begin(
+                    Loc.Localize("ItemSearchPluginMainWindowHeader", $"Item Search") + "###itemSearchPluginMainWindow",
+                    ref isOpen, ImGuiWindowFlags.None);
+                if (!isOpen)
+                {
                     ResetStyle();
                     ImGui.End();
                     return false;
                 }
 
-                if (ImGui.IsWindowAppearing()) {
-                    SearchFilters.ForEach(f => f._ForceVisible = false);
+                if (ImGui.IsWindowAppearing())
+                {
+                    SearchFilters.ForEach(f => f.ForceVisible = false);
                 }
 
                 PopStyle();
@@ -255,7 +285,8 @@ namespace ItemSearchPlugin {
                 // Main window
                 ImGui.AlignTextToFramePadding();
 
-                if (selectedItem != null) {
+                if (selectedItem != null)
+                {
                     ImGui.BeginChild("SelectedItemBox", new Vector2(-1, 45) * ImGui.GetIO().FontGlobalScale);
 
                     var icon = selectedItem.Icon;
@@ -265,14 +296,16 @@ namespace ItemSearchPlugin {
                     ImGui.SameLine();
                     ImGui.BeginGroup();
 
-                    if (selectedItem.GenericItemType == GenericItem.ItemType.EventItem) {
+                    if (selectedItem.GenericItemType == GenericItem.ItemType.EventItem)
+                    {
                         ImGui.TextDisabled("[Key Item]");
                         ImGui.SameLine();
                     }
-                    
+
                     ImGui.Text(selectedItem.Name);
 
-                    if (pluginConfig.ShowItemID) {
+                    if (pluginConfig.ShowItemID)
+                    {
                         ImGui.SameLine();
                         ImGui.Text($"(ID: {selectedItem.RowId}) (Rarity: {selectedItem.Rarity})");
                     }
@@ -280,23 +313,30 @@ namespace ItemSearchPlugin {
                     var imGuiStyle = ImGui.GetStyle();
                     var windowVisible = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
 
-                    IActionButton[] buttons = ActionButtons.Where(ab => ab.ButtonPosition == ActionButtonPosition.TOP).ToArray();
+                    IActionButton[] buttons = actionButtons.Where(ab => ab.ButtonPosition == ActionButtonPosition.TOP)
+                        .ToArray();
 
-                    for (var i = 0; i < buttons.Length; i++) {
+                    for (var i = 0; i < buttons.Length; i++)
+                    {
                         var button = buttons[i];
 
-                        if (button.GetShowButton(selectedItem)) {
+                        if (button.GetShowButton(selectedItem))
+                        {
                             var buttonText = button.GetButtonText(selectedItem);
                             ImGui.PushID($"TopActionButton{i}");
-                            if (ImGui.Button(buttonText)) {
+                            if (ImGui.Button(buttonText))
+                            {
                                 button.OnButtonClicked(selectedItem);
                             }
 
-                            if (i < buttons.Length - 1) {
+                            if (i < buttons.Length - 1)
+                            {
                                 var lX2 = ImGui.GetItemRectMax().X;
-                                var nbw = ImGui.CalcTextSize(buttons[i + 1].GetButtonText(selectedItem)).X + imGuiStyle.ItemInnerSpacing.X * 2;
+                                var nbw = ImGui.CalcTextSize(buttons[i + 1].GetButtonText(selectedItem)).X +
+                                          imGuiStyle.ItemInnerSpacing.X * 2;
                                 var nX2 = lX2 + (imGuiStyle.ItemSpacing.X * 2) + nbw;
-                                if (nX2 < windowVisible) {
+                                if (nX2 < windowVisible)
+                                {
                                     ImGui.SameLine();
                                 }
                             }
@@ -308,128 +348,170 @@ namespace ItemSearchPlugin {
                     ImGui.EndGroup();
 
                     ImGui.EndChild();
-                } else {
+                }
+                else
+                {
                     ImGui.BeginChild("NoSelectedItemBox", new Vector2(-1, 45) * ImGui.GetIO().FontGlobalScale);
                     ImGui.Text(Loc.Localize("ItemSearchSelectItem", "Please select an item."));
 
 
-                    if (!pluginConfig.HideKofi) {
+                    if (!pluginConfig.HideKofi)
+                    {
                         ImGui.PushStyleColor(ImGuiCol.Button, 0xFF5E5BFF);
                         ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0xFF5E5BAA);
                         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0xFF5E5BDD);
-                        ImGui.SameLine(ImGui.GetWindowWidth() - ImGui.CalcTextSize("Support on Ko-fi").X - ImGui.GetStyle().FramePadding.X * 3);
-                        if (ImGui.Button("Support on Ko-Fi")) {
-                            Process.Start(new ProcessStartInfo(){
+                        ImGui.SameLine(ImGui.GetWindowWidth() - ImGui.CalcTextSize("Support on Ko-fi").X -
+                                       ImGui.GetStyle().FramePadding.X * 3);
+                        if (ImGui.Button("Support on Ko-Fi"))
+                        {
+                            Process.Start(new ProcessStartInfo()
+                            {
                                 UseShellExecute = true,
                                 FileName = "https://ko-fi.com/Khayle"
                             });
                         }
+
                         ImGui.PopStyleColor(3);
                     }
-                    
+
                     ImGui.EndChild();
                 }
 
                 ImGui.Separator();
 
                 ImGui.Columns(2);
-                var filterNameMax = SearchFilters.Where(x => x.IsEnabled && x.ShowFilter).Select(x => {
-                    x._LocalizedName = Loc.Localize(x.NameLocalizationKey, x.Name);
-                    x._LocalizedNameWidth = ImGui.CalcTextSize($"{x._LocalizedName}").X;
-                    return x._LocalizedNameWidth;
+                var filterNameMax = SearchFilters.Where(x => x is { IsEnabled: true, ShowFilter: true }).Select(x =>
+                {
+                    x.LocalizedName = Loc.Localize(x.NameLocalizationKey, x.Name);
+                    x.LocalizedNameWidth = ImGui.CalcTextSize($"{x.LocalizedName}").X;
+                    return x.LocalizedNameWidth;
                 }).Max();
 
                 ImGui.SetColumnWidth(0, filterNameMax + ImGui.GetStyle().ItemSpacing.X * 2);
                 var filterInUseColour = new Vector4(0, 1, 0, 1);
                 var filterUsingTagColour = new Vector4(0.4f, 0.7f, 1, 1);
-                
-                foreach (var filter in SearchFilters.Where(x => x.IsEnabled && x.ShowFilter)) {
-                    if (!extraFiltersExpanded && filter.CanBeDisabled && !filter.IsSet && !filter._ForceVisible) continue;
-                    ImGui.SetCursorPosX((filterNameMax + ImGui.GetStyle().ItemSpacing.X) - filter._LocalizedNameWidth);
+
+                foreach (var filter in SearchFilters.Where(x => x is { IsEnabled: true, ShowFilter: true }))
+                {
+                    if (!extraFiltersExpanded && filter is { CanBeDisabled: true, IsSet: false, ForceVisible: false })
+                        continue;
+                    ImGui.SetCursorPosX((filterNameMax + ImGui.GetStyle().ItemSpacing.X) - filter.LocalizedNameWidth);
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
-                    if (filter.IsSet) {
-                        ImGui.TextColored(filter.IsFromTag ? filterUsingTagColour : filterInUseColour, $"{filter._LocalizedName}: ");
-                    } else {
-                        ImGui.Text($"{filter._LocalizedName}: ");
+                    if (filter.IsSet)
+                    {
+                        ImGui.TextColored(filter.IsFromTag ? filterUsingTagColour : filterInUseColour,
+                            $"{filter.LocalizedName}: ");
+                    }
+                    else
+                    {
+                        ImGui.Text($"{filter.LocalizedName}: ");
                     }
 
                     ImGui.NextColumn();
                     ImGui.BeginGroup();
-                    if (filter.IsFromTag && filter.GreyWithTags) ImGui.PushStyleColor(ImGuiCol.Text, 0xFF888888);
+                    if (filter is { IsFromTag: true, GreyWithTags: true })
+                        ImGui.PushStyleColor(ImGuiCol.Text, 0xFF888888);
                     filter.DrawEditor();
-                    if (filter.IsFromTag && filter.GreyWithTags) ImGui.PopStyleColor();
+                    if (filter is { IsFromTag: true, GreyWithTags: true }) ImGui.PopStyleColor();
                     ImGui.EndGroup();
                     while (ImGui.GetColumnIndex() != 0)
                         ImGui.NextColumn();
                 }
+
                 ImGui.Columns(1);
 
                 ImGui.PushFont(UiBuilder.IconFont);
                 ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(0, -5 * ImGui.GetIO().FontGlobalScale));
                 ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-                if (ImGui.Button($"{(extraFiltersExpanded ? (char) FontAwesomeIcon.CaretUp : (char) FontAwesomeIcon.CaretDown)}", new Vector2(-1, 10 * ImGui.GetIO().FontGlobalScale))) {
+                if (ImGui.Button(
+                        $"{(extraFiltersExpanded ? (char)FontAwesomeIcon.CaretUp : (char)FontAwesomeIcon.CaretDown)}",
+                        new Vector2(-1, 10 * ImGui.GetIO().FontGlobalScale)))
+                {
                     extraFiltersExpanded = !extraFiltersExpanded;
-                    SearchFilters.ForEach(f => f._ForceVisible = f.IsEnabled && f.ShowFilter && f.IsSet);
+                    SearchFilters.ForEach(f =>
+                        f.ForceVisible = f is { IsEnabled: true, ShowFilter: true, IsSet: true });
                     pluginConfig.ExpandedFilters = extraFiltersExpanded;
                     pluginConfig.Save();
                 }
+
                 ImGui.PopStyleVar(2);
                 ImGui.PopFont();
 
                 var windowSize = ImGui.GetWindowSize();
-                var childSize = new Vector2(0, Math.Max(100 * ImGui.GetIO().FontGlobalScale, windowSize.Y - ImGui.GetCursorPosY() - 45 * ImGui.GetIO().FontGlobalScale));
+                var childSize = new Vector2(0,
+                    Math.Max(100 * ImGui.GetIO().FontGlobalScale,
+                        windowSize.Y - ImGui.GetCursorPosY() - 45 * ImGui.GetIO().FontGlobalScale));
                 ImGui.BeginChild("scrolling", childSize, true, ImGuiWindowFlags.HorizontalScrollbar);
 
                 PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(0, 0));
 
-                if (errorLoadingItems) {
-                    ImGui.TextColored(new Vector4(1f, 0.1f, 0.1f, 1.00f), Loc.Localize("ItemSearchListLoadFailed", "Error loading item list."));
-                    if (ImGui.SmallButton("Retry")) {
+                if (errorLoadingItems)
+                {
+                    ImGui.TextColored(new Vector4(1f, 0.1f, 0.1f, 1.00f),
+                        Loc.Localize("ItemSearchListLoadFailed", "Error loading item list."));
+                    if (ImGui.SmallButton("Retry"))
+                    {
                         UpdateItemList();
                     }
-                } else if (plugin.LuminaItems != null) {
-                    if (SearchFilters.Any(x => x.IsEnabled && x.ShowFilter && x.IsSet)) {
+                }
+                else if (plugin.LuminaItems != null)
+                {
+                    if (SearchFilters.Any(x => x is { IsEnabled: true, ShowFilter: true, IsSet: true }))
+                    {
                         showingFavourites = false;
                         isSearch = true;
-                        if (SearchFilters.Any(x => x.IsEnabled && x.ShowFilter && x.HasChanged) || forceReload) {
+                        if (SearchFilters.Any(x => x is { IsEnabled: true, ShowFilter: true, HasChanged: true }) ||
+                            forceReload)
+                        {
                             forceReload = false;
-                            searchCancelTokenSource?.Cancel();
+                            searchCancelTokenSource.Cancel();
                             searchCancelTokenSource = new CancellationTokenSource();
                             var asyncEnum = plugin.LuminaItems.ToAsyncEnumerable();
 
-                            if (!pluginConfig.ShowLegacyItems) {
+                            if (!pluginConfig.ShowLegacyItems)
+                            {
                                 asyncEnum = asyncEnum.Where(x => x.RowId < 100 || x.RowId > 1600);
                             }
 
-                            asyncEnum = SearchFilters.Where(filter => filter.IsEnabled && filter.ShowFilter && filter.IsSet).Aggregate(asyncEnum, (current, filter) => current.Where(filter.CheckFilter));
+                            asyncEnum = SearchFilters
+                                .Where(filter => filter is { IsEnabled: true, ShowFilter: true, IsSet: true })
+                                .Aggregate(asyncEnum, (current, filter) => current.Where(filter.CheckFilter));
                             selectedItemIndex = -1;
                             selectedItem = null;
                             searchTask = asyncEnum.ToListAsync(searchCancelTokenSource.Token);
                         }
 
-                        if (searchTask.IsCompletedSuccessfully) {
+                        if (searchTask.IsCompletedSuccessfully)
+                        {
                             DrawItemList(searchTask.Result, childSize, ref isOpen);
                         }
-
-                        
-                    } else {
-
-
-                        if (pluginConfig.Favorites.Count > 0) {
-                            if (!showingFavourites || favouritesList.Count != pluginConfig.Favorites.Count) {
+                    }
+                    else
+                    {
+                        if (pluginConfig.Favorites.Count > 0)
+                        {
+                            if (!showingFavourites || favouritesList.Count != pluginConfig.Favorites.Count)
+                            {
                                 showingFavourites = true;
                                 selectedItemIndex = -1;
                                 selectedItem = null;
-                                favouritesList = plugin.LuminaItems.Where(i => pluginConfig.Favorites.Contains(i.RowId)).ToList();
+                                favouritesList = plugin.LuminaItems.Where(i => pluginConfig.Favorites.Contains(i.RowId))
+                                    .ToList();
                             }
-                            
+
                             DrawItemList(favouritesList, childSize, ref isOpen);
-                        } else {
-                            ImGui.TextColored(new Vector4(0.86f, 0.86f, 0.86f, 1.00f), Loc.Localize("DalamudItemSelectHint", "Type to start searching..."));
+                        }
+                        else
+                        {
+                            ImGui.TextColored(new Vector4(0.86f, 0.86f, 0.86f, 1.00f),
+                                Loc.Localize("DalamudItemSelectHint", "Type to start searching..."));
                         }
                     }
-                } else {
-                    ImGui.TextColored(new Vector4(0.86f, 0.86f, 0.86f, 1.00f), Loc.Localize("DalamudItemSelectLoading", "Loading item list..."));
+                }
+                else
+                {
+                    ImGui.TextColored(new Vector4(0.86f, 0.86f, 0.86f, 1.00f),
+                        Loc.Localize("DalamudItemSelectLoading", "Loading item list..."));
                 }
 
                 PopStyle();
@@ -437,39 +519,51 @@ namespace ItemSearchPlugin {
                 ImGui.EndChild();
 
                 // Darken choose button if it shouldn't be clickable
-                PushStyle(ImGuiStyleVar.Alpha, selectedItemIndex < 0 || selectedItem == null || selectedItem.Icon >= 65000 ? 0.25f : 1);
+                PushStyle(ImGuiStyleVar.Alpha,
+                    selectedItemIndex < 0 || selectedItem is { Icon: >= 65000 } ? 0.25f : 1);
 
-                if (ImGui.Button(Loc.Localize("Choose", "Choose"))) {
-                    try {
-                        if (selectedItem != null && selectedItem.Icon < 65000) {
+                if (ImGui.Button(Loc.Localize("Choose", "Choose")))
+                {
+                    try
+                    {
+                        if (selectedItem is { Icon: < 65000 })
+                        {
                             plugin.LinkItem(selectedItem);
-                            if (pluginConfig.CloseOnChoose) {
+                            if (pluginConfig.CloseOnChoose)
+                            {
                                 isOpen = false;
                             }
                         }
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex)
+                    {
                         PluginLog.Error($"Exception in Choose: {ex.Message}");
                     }
                 }
 
                 PopStyle();
 
-                if (!pluginConfig.CloseOnChoose) {
+                if (!pluginConfig.CloseOnChoose)
+                {
                     ImGui.SameLine();
-                    if (ImGui.Button(Loc.Localize("Close", "Close"))) {
+                    if (ImGui.Button(Loc.Localize("Close", "Close")))
+                    {
                         selectedItem = null;
                         isOpen = false;
                     }
                 }
 
-                if (selectedItemIndex >= 0 && selectedItem != null && selectedItem.Icon >= 65000) {
+                if (selectedItemIndex >= 0 && selectedItem is { Icon: >= 65000 })
+                {
                     ImGui.SameLine();
                     ImGui.Text(Loc.Localize("DalamudItemNotLinkable", "This item is not linkable."));
                 }
 
-                if (pluginConfig.ShowTryOn && ClientState?.LocalContentId != 0) {
+                if (pluginConfig.ShowTryOn && ClientState.LocalContentId != 0)
+                {
                     ImGui.SameLine();
-                    if (ImGui.Checkbox(Loc.Localize("ItemSearchTryOnButton", "Try On"), ref autoTryOn)) {
+                    if (ImGui.Checkbox(Loc.Localize("ItemSearchTryOnButton", "Try On"), ref autoTryOn))
+                    {
                         pluginConfig.TryOnEnabled = autoTryOn;
                         pluginConfig.Save();
                     }
@@ -477,75 +571,94 @@ namespace ItemSearchPlugin {
                     ImGui.SameLine();
 
 
-                    ImGui.PushStyleColor(ImGuiCol.Border, selectedStain != null && selectedStain.Value.Unknown1 ? new Vector4(1, 1, 0, 1) : new Vector4(1, 1, 1, 1));
+                    ImGui.PushStyleColor(ImGuiCol.Border,
+                        selectedStain is { Unknown1: true }
+                            ? new Vector4(1, 1, 0, 1)
+                            : new Vector4(1, 1, 1, 1));
                     PushStyle(ImGuiStyleVar.FrameBorderSize, 2f);
 
-                    if (StainButton(selectedStain, new Vector2(ImGui.GetItemRectSize().Y), false)) {
+                    if (StainButton(selectedStain, new Vector2(ImGui.GetItemRectSize().Y), false))
+                    {
                         stainIndex = 0;
                         showStainSelector = true;
                     }
 
-                    if (ImGui.IsItemClicked(ImGuiMouseButton.Right)) {
+                    if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+                    {
                         selectedStain = null;
                         pluginConfig.SelectedStain = 0;
                         pluginConfig.Save();
                     }
-                    
-                    
+
+
                     PopStyle();
 
                     ImGui.PopStyleColor();
 
-                    if (ImGui.IsItemHovered()) {
+                    if (ImGui.IsItemHovered())
+                    {
                         ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                         ImGui.BeginTooltip();
-                        ImGui.Text(selectedStain == null ? "No Dye Selected" : selectedStain.Value.Name.ToString());
-                        if (selectedStain != null) {
+                        ImGui.Text(selectedStain == null ? "未选择染色" : selectedStain.Value.Name.ToString());
+                        if (selectedStain != null)
+                        {
                             ImGui.TextDisabled("Right click to clear selection.");
                         }
+
                         ImGui.EndTooltip();
                     }
-                    
+
                     ImGui.SameLine();
 
 
-                    ImGui.PushStyleColor(ImGuiCol.Border, selectedStain != null && selectedStain.Value.Unknown1 ? new Vector4(1, 1, 0, 1) : new Vector4(1, 1, 1, 1));
+                    ImGui.PushStyleColor(ImGuiCol.Border,
+                        selectedStain is { Unknown1: true }
+                            ? new Vector4(1, 1, 0, 1)
+                            : new Vector4(1, 1, 1, 1));
                     PushStyle(ImGuiStyleVar.FrameBorderSize, 2f);
 
-                    if (StainButton(selectedStain2, new Vector2(ImGui.GetItemRectSize().Y), false)) {
+                    if (StainButton(selectedStain2, new Vector2(ImGui.GetItemRectSize().Y), false))
+                    {
                         showStainSelector = true;
                         stainIndex = 1;
                     }
 
-                    if (ImGui.IsItemClicked(ImGuiMouseButton.Right)) {
+                    if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+                    {
                         selectedStain2 = null;
                         pluginConfig.SelectedStain2 = 0;
                         pluginConfig.Save();
                     }
-                    
+
                     PopStyle();
 
                     ImGui.PopStyleColor();
 
-                    if (ImGui.IsItemHovered()) {
+                    if (ImGui.IsItemHovered())
+                    {
                         ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                         ImGui.BeginTooltip();
-                        ImGui.Text(selectedStain2 == null ? "No Dye Selected" : selectedStain2.Value.Name.ToString());
-                        if (selectedStain != null) {
+                        ImGui.Text(selectedStain2 == null ? "未选择染色" : selectedStain2.Value.Name.ToString());
+                        if (selectedStain != null)
+                        {
                             ImGui.TextDisabled("Right click to clear selection.");
                         }
+
                         ImGui.EndTooltip();
                     }
-                    
-                    
                 }
 
-                if (pluginConfig.ShowPreviewHousing && ClientState?.LocalContentId != 0) {
-                    if (GameGui.GetAddonByName("HousingEditInterior", 1) != IntPtr.Zero || GameGui.GetAddonByName("HousingEditExterior", 1) != IntPtr.Zero) {
+                if (pluginConfig.ShowPreviewHousing && ClientState.LocalContentId != 0)
+                {
+                    if (GameGui.GetAddonByName("HousingEditInterior", 1) != IntPtr.Zero ||
+                        GameGui.GetAddonByName("HousingEditExterior", 1) != IntPtr.Zero)
+                    {
                         ImGui.SameLine();
                         ImGui.Dummy(new Vector2(15, 0));
                         ImGui.SameLine();
-                        if (ImGui.Checkbox(Loc.Localize("ItemSearchPreviewHousing", "Preview Housing"), ref autoPreviewHousing)) {
+                        if (ImGui.Checkbox(Loc.Localize("ItemSearchPreviewHousing", "Preview Housing"),
+                                ref autoPreviewHousing))
+                        {
                             pluginConfig.PreviewHousingEnabled = autoPreviewHousing;
                             pluginConfig.Save();
                         }
@@ -556,40 +669,55 @@ namespace ItemSearchPlugin {
                 var configText = $"{(char)FontAwesomeIcon.Cog}";
                 var configTextSize = ImGui.CalcTextSize(configText);
                 ImGui.PopFont();
-                var itemCountText = isSearch ? string.Format(Loc.Localize("ItemCount", "{0} Items"), searchTask.Result.Count) : $"v{plugin.Version}";
-                ImGui.SameLine(ImGui.GetWindowWidth() - (configTextSize.X + ImGui.GetStyle().ItemSpacing.X) - (ImGui.CalcTextSize(itemCountText).X + ImGui.GetStyle().ItemSpacing.X * (isSearch ? 3 : 2)));
-                if (isSearch) {
-                    if (ImGui.Button(itemCountText)) {
+                var itemCountText = isSearch
+                    ? string.Format(Loc.Localize("ItemCount", "{0} Items"), searchTask.Result.Count)
+                    : $"v{plugin.Version}";
+                ImGui.SameLine(ImGui.GetWindowWidth() - (configTextSize.X + ImGui.GetStyle().ItemSpacing.X) -
+                               (ImGui.CalcTextSize(itemCountText).X +
+                                ImGui.GetStyle().ItemSpacing.X * (isSearch ? 3 : 2)));
+                if (isSearch)
+                {
+                    if (ImGui.Button(itemCountText))
+                    {
                         PluginLog.Debug("Copying results to Clipboard");
 
                         var sb = new StringBuilder();
 
-                        if (pluginConfig.PrependFilterListWithCopy) {
-                            foreach (var f in SearchFilters.Where(f => f.IsSet)) {
+                        if (pluginConfig.PrependFilterListWithCopy)
+                        {
+                            foreach (var f in SearchFilters.Where(f => f.IsSet))
+                            {
                                 sb.AppendLine($"{f.Name}: {f}");
                             }
 
                             sb.AppendLine();
                         }
 
-                        foreach (var i in searchTask.Result) {
+                        foreach (var i in searchTask.Result)
+                        {
                             sb.AppendLine(i.Name);
                         }
+
                         ImGui.SetClipboardText(sb.ToString());
                     }
 
-                    if (ImGui.IsItemHovered()) {
-                        ImGui.SetTooltip("Copy results to clipboard");
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("复制结果到剪切板");
                     }
-                } else {
+                }
+                else
+                {
                     ImGui.Text(itemCountText);
                 }
 
                 ImGui.SameLine(ImGui.GetWindowWidth() - (configTextSize.X + ImGui.GetStyle().ItemSpacing.X * 2));
                 ImGui.PushFont(UiBuilder.IconFont);
-                if (ImGui.Button(configText)) {
+                if (ImGui.Button(configText))
+                {
                     plugin.ToggleConfigWindow();
                 }
+
                 ImGui.PopFont();
 
                 var mainWindowPos = ImGui.GetWindowPos();
@@ -598,101 +726,125 @@ namespace ItemSearchPlugin {
                 ImGui.End();
 
 
-                if (showStainSelector) {
+                if (showStainSelector)
+                {
                     ImGui.SetNextWindowSize(ImGuiHelpers.ScaledVector2(300, 220));
                     ImGui.SetNextWindowPos(mainWindowPos + mainWindowSize - ImGuiHelpers.ScaledVector2(0, 220));
 
 
-
-                    if (ImGui.Begin($"Select Dye (Slot #{stainIndex+1}) ###Select Dye", ref showStainSelector, ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar| ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove)) {
-
+                    if (ImGui.Begin($"选择染色 (染色{stainIndex + 1}) ###Select Dye", ref showStainSelector,
+                            ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoResize |
+                            ImGuiWindowFlags.NoMove))
+                    {
                         var texture = TextureProvider.GetFromGame("ui/uld/ListColorChooser_hr1.tex").GetWrapOrDefault();
-                        if (texture != null) {
+                        if (texture != null)
+                        {
                             var size = ImGui.GetContentRegionAvail().X / stainShadeHeaders.Count;
 
 
-
-                            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero)) {
-                                foreach (var shade in stainShadeHeaders) {
-
-                                   
-
-                                    using (ImRaii.Group()) {
+                            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+                            {
+                                foreach (var shade in stainShadeHeaders)
+                                {
+                                    using (ImRaii.Group())
+                                    {
                                         var p = ImGui.GetCursorPos();
-                                        if (shade.Key == 10) {
-                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0, 0.647f), new Vector2(0.3333f, 1f));
-                                        } else {
-                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0, 0), new Vector2(0.3333f, 0.3529f), shade.Value);
+                                        if (shade.Key == 10)
+                                        {
+                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0, 0.647f),
+                                                new Vector2(0.3333f, 1f));
                                         }
-                                        ImGui.SetCursorPos(p);
-                                        if (selectedStainTab == shade.Key || ImGui.IsItemHovered()) {
-                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0.6666f, 0), new Vector2(1, 0.3529f));
-                                        } else {
-                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0.3333f, 0), new Vector2(0.6666f, 0.3529f));
+                                        else
+                                        {
+                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0, 0),
+                                                new Vector2(0.3333f, 0.3529f), shade.Value);
                                         }
-                                        
-                                    }
-                                    
 
-                                    if (ImGui.IsItemHovered()) {
+                                        ImGui.SetCursorPos(p);
+                                        if (selectedStainTab == shade.Key || ImGui.IsItemHovered())
+                                        {
+                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0.6666f, 0),
+                                                new Vector2(1, 0.3529f));
+                                        }
+                                        else
+                                        {
+                                            ImGui.Image(texture.Handle, new Vector2(size), new Vector2(0.3333f, 0),
+                                                new Vector2(0.6666f, 0.3529f));
+                                        }
+                                    }
+
+
+                                    if (ImGui.IsItemHovered())
+                                    {
                                         ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                                     }
 
-                                    if (ImGui.IsItemClicked()) {
+                                    if (ImGui.IsItemClicked())
+                                    {
                                         selectedStainTab = shade.Key;
                                     }
-   
-                                    
-                                    ImGui.SameLine();
-                                    
 
+
+                                    ImGui.SameLine();
                                 }
                             }
+
                             ImGui.NewLine();
                             ImGui.Separator();
 
                             var stainSize = ImGui.GetContentRegionAvail().X / 8f;
 
-                            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero)) {
-                                foreach (var stain in stains.Where(s => s.Shade == selectedStainTab && !string.IsNullOrEmpty(s.Name.ToString()))) {
-                                    if (ImGui.GetContentRegionAvail().X < stainSize) {
+                            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+                            {
+                                foreach (var stain in stains.Where(s =>
+                                             s.Shade == selectedStainTab && !string.IsNullOrEmpty(s.Name.ToString())))
+                                {
+                                    if (ImGui.GetContentRegionAvail().X < stainSize)
+                                    {
                                         ImGui.NewLine();
                                     }
 
-                                    if (StainButton(stain, new Vector2(stainSize))) {
-                                        switch (stainIndex) {
-                                            case 0: {
+                                    if (StainButton(stain, new Vector2(stainSize)))
+                                    {
+                                        switch (stainIndex)
+                                        {
+                                            case 0:
+                                            {
                                                 selectedStain = stain;
                                                 pluginConfig.SelectedStain = stain.RowId;
                                                 break;
                                             }
-                                            case 1: {
+                                            case 1:
+                                            {
                                                 selectedStain2 = stain;
                                                 pluginConfig.SelectedStain2 = stain.RowId;
                                                 break;
                                             }
                                         }
-                                        
+
                                         showStainSelector = false;
                                         pluginConfig.Save();
                                     }
 
-                                    if (ImGui.IsItemHovered()) {
+                                    if (ImGui.IsItemHovered())
+                                    {
                                         ImGui.SetTooltip(stain.Name.ToDalamudString().TextValue);
                                     }
-                                    
+
                                     ImGui.SameLine();
-                                    
                                 }
                             }
                         }
                     }
+
                     ImGui.End();
                 }
 
 
                 return isOpen;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 ResetStyle();
                 PluginLog.Error(ex.ToString());
                 selectedItem = null;
@@ -701,9 +853,10 @@ namespace ItemSearchPlugin {
             }
         }
 
-        private unsafe bool StainButton(Stain? stainMaybe, Vector2 size, bool showSelectedHighlight = true) {
+        private unsafe bool StainButton(Stain? stainMaybe, Vector2 size, bool showSelectedHighlight = true)
+        {
             ImGui.Dummy(size);
-            
+
             var drawOffset = size / 1.5f;
             var drawOffset2 = size / 2.25f;
             var pos = ImGui.GetItemRectMin();
@@ -711,25 +864,34 @@ namespace ItemSearchPlugin {
             var dl = ImGui.GetWindowDrawList();
             var texture = TextureProvider.GetFromGame("ui/uld/ListColorChooser_hr1.tex").GetWrapOrDefault();
             if (texture == null) return ImGui.IsItemClicked();
-            
-            if (stainMaybe == null) {
-                dl.AddImage(texture.Handle, center - drawOffset2, center + drawOffset2, new Vector2(0.8333333f, 0.3529412f), new Vector2(0.9444444f, 0.47058824f), 0x80FFFFFF);
-                dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.27777f, 0.3529f), new Vector2(0.55555f, 0.64705f));
-                if (ImGui.IsItemHovered()) {
-                    dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.55555f, 0.3529f), new Vector2(0.83333f, 0.64705f));
+
+            if (stainMaybe == null)
+            {
+                dl.AddImage(texture.Handle, center - drawOffset2, center + drawOffset2,
+                    new Vector2(0.8333333f, 0.3529412f), new Vector2(0.9444444f, 0.47058824f), 0x80FFFFFF);
+                dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.27777f, 0.3529f),
+                    new Vector2(0.55555f, 0.64705f));
+                if (ImGui.IsItemHovered())
+                {
+                    dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset,
+                        new Vector2(0.55555f, 0.3529f), new Vector2(0.83333f, 0.64705f));
                 }
+
                 return ImGui.IsItemClicked();
             }
+
             var stain = stainMaybe.Value;
-            
+
             var b = stain.Color & 255;
             var g = (stain.Color >> 8) & 255;
             var r = (stain.Color >> 16) & 255;
             var stainVec4 = new Vector4(r / 255f, g / 255f, b / 255f, 1f);
             var stainColor = ImGui.GetColorU32(stainVec4);
-            
-            dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0, 0.3529f), new Vector2(0.27777f, 0.6470f), stainColor);
-            if (stain.Unknown1) {
+
+            dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0, 0.3529f),
+                new Vector2(0.27777f, 0.6470f), stainColor);
+            if (stain.Unknown1)
+            {
                 dl.PushClipRect(center - drawOffset2, center + drawOffset2);
                 float h, s, v, dR, dG, dB, bR, bG, bB;
                 ImGui.ColorConvertRGBtoHSV(stainVec4.X, stainVec4.Y, stainVec4.Z, &h, &s, &v);
@@ -740,33 +902,40 @@ namespace ItemSearchPlugin {
                 var tr = pos + size with { Y = 0 };
                 var bl = pos + size with { X = 0 };
                 var opacity = 0U;
-                for (var x = 3; x < size.X; x++) {
+                for (var x = 3; x < size.X; x++)
+                {
                     if (opacity < 0xF0_00_00_00U) opacity += 0x08_00_00_00U;
                     dl.AddLine(tr + new Vector2(0, x), bl + new Vector2(x, 0), opacity | (0x00A0A0A0 & dColor), 2);
                     dl.AddLine(tr - new Vector2(0, x), bl - new Vector2(x, 0), opacity | (0x00FFFFFF & bColor), 2);
                 }
+
                 dl.PopClipRect();
             }
-            
-            dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.27777f, 0.3529f), new Vector2(0.55555f, 0.64705f));
-            if ((showSelectedHighlight && selectedStain.HasValue && selectedStain.Value.RowId == stain.RowId) || ImGui.IsItemHovered()) {
-                dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.55555f, 0.3529f), new Vector2(0.83333f, 0.64705f));
+
+            dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.27777f, 0.3529f),
+                new Vector2(0.55555f, 0.64705f));
+            if ((showSelectedHighlight && selectedStain.HasValue && selectedStain.Value.RowId == stain.RowId) ||
+                ImGui.IsItemHovered())
+            {
+                dl.AddImage(texture.Handle, center - drawOffset, center + drawOffset, new Vector2(0.55555f, 0.3529f),
+                    new Vector2(0.83333f, 0.64705f));
             }
-            
+
             return ImGui.IsItemClicked();
         }
-        
-        private int lastItemCount = 0;
+
+        private int lastItemCount;
 
 
-
-        private void DrawItemList(List<GenericItem> itemList, Vector2 listSize, ref bool isOpen) {
+        private void DrawItemList(List<GenericItem> itemList, Vector2 listSize, ref bool isOpen)
+        {
             var fontPushed = false;
             var stylesPushed = 0;
             var colorsPushed = 0;
-            try {
-
-                if (itemList.Count != lastItemCount) {
+            try
+            {
+                if (itemList.Count != lastItemCount)
+                {
                     lastItemCount = itemList.Count;
                     ImGui.SetScrollY(0);
                 }
@@ -779,11 +948,16 @@ namespace ItemSearchPlugin {
 
                 var rowSize = Vector2.Zero;
 
-                for (var i = 0; i < itemList.Count; i++) {
-                    if (i == 0 && itemSize == Vector2.Zero) {
+                for (var i = 0; i < itemList.Count; i++)
+                {
+                    if (i == 0 && itemSize == Vector2.Zero)
+                    {
                         itemSize = ImGui.CalcTextSize(itemList[i].Name);
-                        rowSize = new Vector2(ImGui.GetWindowContentRegionMax().X - ImGui.GetWindowContentRegionMin().X - 20 * ImGui.GetIO().FontGlobalScale, itemSize.Y);
-                        if (!doSearchScroll) {
+                        rowSize = new Vector2(
+                            ImGui.GetWindowContentRegionMax().X - ImGui.GetWindowContentRegionMin().X -
+                            20 * ImGui.GetIO().FontGlobalScale, itemSize.Y);
+                        if (!doSearchScroll)
+                        {
                             var sizePerItem = itemSize.Y + style.ItemSpacing.Y;
                             var skipItems = (int)Math.Floor(scrollY / sizePerItem);
                             cursorPosY = skipItems * sizePerItem;
@@ -792,111 +966,149 @@ namespace ItemSearchPlugin {
                         }
                     }
 
-                    if (!(doSearchScroll && selectedItemIndex == i) && (cursorPosY < scrollY - itemSize.Y || cursorPosY > scrollY + listSize.Y)) {
+                    if (!(doSearchScroll && selectedItemIndex == i) &&
+                        (cursorPosY < scrollY - itemSize.Y || cursorPosY > scrollY + listSize.Y))
+                    {
                         ImGui.SetCursorPosY(cursorPosY + itemSize.Y + style.ItemSpacing.Y);
-                    } else {
-
+                    }
+                    else
+                    {
                         ImGui.PushFont(UiBuilder.IconFont);
                         fontPushed = true;
 
                         var starText = $"{(char)FontAwesomeIcon.Heart}";
                         var starTextSize = ImGui.CalcTextSize(starText);
-                        var starTextHovered = ImGui.IsMouseHoveringRect(ImGui.GetCursorScreenPos(), ImGui.GetCursorScreenPos() + starTextSize);
-                        var itemRowHovered = ImGui.IsMouseHoveringRect(ImGui.GetCursorScreenPos(), ImGui.GetCursorScreenPos() + new Vector2(ImGui.GetContentRegionAvail().X, starTextSize.Y));
-                        uint starTextCol = pluginConfig.Favorites.Contains(itemList[i].RowId) ? 0xCC0000AA : (uint)(itemRowHovered ? 0x22FFFFFF : 0x0) ;
+                        var starTextHovered = ImGui.IsMouseHoveringRect(ImGui.GetCursorScreenPos(),
+                            ImGui.GetCursorScreenPos() + starTextSize);
+                        var itemRowHovered = ImGui.IsMouseHoveringRect(ImGui.GetCursorScreenPos(),
+                            ImGui.GetCursorScreenPos() + new Vector2(ImGui.GetContentRegionAvail().X, starTextSize.Y));
+                        uint starTextCol = pluginConfig.Favorites.Contains(itemList[i].RowId)
+                            ? 0xCC0000AA
+                            : (uint)(itemRowHovered ? 0x22FFFFFF : 0x0);
 
-                        if (starTextHovered) {
+                        if (starTextHovered)
+                        {
                             starTextCol = pluginConfig.Favorites.Contains(itemList[i].RowId) ? 0xAA777777 : 0xAA0000AAU;
                             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                         }
 
-                        ImGui.PushStyleColor(ImGuiCol.Text, starTextCol); colorsPushed++;
+                        ImGui.PushStyleColor(ImGuiCol.Text, starTextCol);
+                        colorsPushed++;
 
                         ImGui.Text(starText);
-                        if (ImGui.IsItemClicked()) {
-                            if (pluginConfig.Favorites.Contains(itemList[i].RowId)) {
+                        if (ImGui.IsItemClicked())
+                        {
+                            if (pluginConfig.Favorites.Contains(itemList[i].RowId))
+                            {
                                 pluginConfig.Favorites.Remove(itemList[i].RowId);
-                            } else {
+                            }
+                            else
+                            {
                                 pluginConfig.Favorites.Add(itemList[i].RowId);
                             }
+
                             pluginConfig.Save();
                         }
 
-                        ImGui.PopStyleColor(); colorsPushed--;
+                        ImGui.PopStyleColor();
+                        colorsPushed--;
 
                         ImGui.PopFont();
                         fontPushed = false;
                         ImGui.SameLine();
 
-                        var hovered = ImGui.IsMouseHoveringRect(ImGui.GetCursorScreenPos(), ImGui.GetCursorScreenPos() + rowSize);
-                        var bgCol = selectedItem == itemList[i] ? (hovered ? 0x88888888 : 0x88444444) : (hovered ? 0x66666666 : 0U);
-                        ImGui.PushStyleColor(ImGuiCol.ChildBg, bgCol); colorsPushed++;
-                        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero); stylesPushed++;
+                        var hovered = ImGui.IsMouseHoveringRect(ImGui.GetCursorScreenPos(),
+                            ImGui.GetCursorScreenPos() + rowSize);
+                        var bgCol = selectedItem == itemList[i]
+                            ? (hovered ? 0x88888888 : 0x88444444)
+                            : (hovered ? 0x66666666 : 0U);
+                        ImGui.PushStyleColor(ImGuiCol.ChildBg, bgCol);
+                        colorsPushed++;
+                        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+                        stylesPushed++;
                         ImGui.BeginGroup();
                         ImGui.BeginChild($"###ItemContainer{j++}", rowSize, false);
-                        
-                        
+
+
                         ImGui.Text($" {itemList[i].Name.Replace("\u00AD", "").Replace("\u00A0", "")}");
-                        if (itemList[i].GenericItemType == GenericItem.ItemType.EventItem) {
+                        if (itemList[i].GenericItemType == GenericItem.ItemType.EventItem)
+                        {
                             ImGui.SameLine();
                             ImGui.TextDisabled(" [Key Item]");
                         }
+
                         var textClick = ImGui.IsItemClicked();
                         ImGui.EndChild();
                         var childClicked = ImGui.IsItemClicked();
                         ImGui.EndGroup();
-                        var groupHovered = ImGui.IsItemHovered();
                         var groupClicked = ImGui.IsItemClicked();
-                        ImGui.PopStyleColor(); colorsPushed--;
+                        ImGui.PopStyleColor();
+                        colorsPushed--;
 
 
-                        if (textClick || childClicked || groupClicked) {
+                        if (textClick || childClicked || groupClicked)
+                        {
                             selectedItem = itemList[i];
                             selectedItemIndex = i;
 
-                            if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)) {
-                                if (selectedItem != null && selectedItem.Icon < 65000) {
-                                    try {
+                            if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                            {
+                                if (selectedItem is { Icon: < 65000 })
+                                {
+                                    try
+                                    {
                                         plugin.LinkItem(selectedItem);
-                                        if (pluginConfig.CloseOnChoose) {
+                                        if (pluginConfig.CloseOnChoose)
+                                        {
                                             isOpen = false;
                                         }
-                                    } catch (Exception ex) {
+                                    }
+                                    catch (Exception ex)
+                                    {
                                         PluginLog.Error(ex.ToString());
                                     }
                                 }
                             }
 
-                            if (selectedItem!.GenericItemType == GenericItem.ItemType.Item) {
-                                if ((autoTryOn = autoTryOn && pluginConfig.ShowTryOn) && plugin.TryOn.CanUseTryOn && ClientState.LocalContentId != 0) {
-                                    if (selectedItem.ClassJobCategory.RowId != 0) {
-                                        plugin.TryOn.TryOnItem((Item)selectedItem, selectedStain?.RowId ?? 0, selectedStain2?.RowId ?? 0);
+                            if (selectedItem!.GenericItemType == GenericItem.ItemType.Item)
+                            {
+                                if ((autoTryOn = autoTryOn && pluginConfig.ShowTryOn) && plugin.TryOn.CanUseTryOn &&
+                                    ClientState.LocalContentId != 0)
+                                {
+                                    if (selectedItem.ClassJobCategory.RowId != 0)
+                                    {
+                                        plugin.TryOn.TryOnItem((Item)selectedItem, selectedStain?.RowId ?? 0,
+                                            selectedStain2?.RowId ?? 0);
                                     }
                                 }
 
-                                if (autoPreviewHousing && pluginConfig.ShowPreviewHousing && ClientState.LocalContentId != 0) {
+                                if (autoPreviewHousing && pluginConfig.ShowPreviewHousing &&
+                                    ClientState.LocalContentId != 0)
+                                {
                                     plugin.PreviewHousingItem(selectedItem);
                                     plugin.PreviewExteriorHousingItem(selectedItem, selectedStain?.RowId ?? 0);
                                 }
                             }
-                            
                         }
 
-                        ImGui.PopStyleVar(); stylesPushed--;
+                        ImGui.PopStyleVar();
+                        stylesPushed--;
                     }
 
 
-
-                    if (doSearchScroll && selectedItemIndex == i) {
+                    if (doSearchScroll && selectedItemIndex == i)
+                    {
                         doSearchScroll = false;
                         ImGui.SetScrollHereY(0.5f);
                     }
 
                     cursorPosY = ImGui.GetCursorPosY();
 
-                    if (cursorPosY > scrollY + listSize.Y && !doSearchScroll) {
+                    if (cursorPosY > scrollY + listSize.Y && !doSearchScroll)
+                    {
                         var c = itemList.Count - i;
-                        ImGui.BeginChild("###scrollFillerBottom", new Vector2(0, c * (itemSize.Y + style.ItemSpacing.Y)), false);
+                        ImGui.BeginChild("###scrollFillerBottom",
+                            new Vector2(0, c * (itemSize.Y + style.ItemSpacing.Y)), false);
                         ImGui.EndChild();
                         break;
                     }
@@ -907,12 +1119,14 @@ namespace ItemSearchPlugin {
 
 #if DEBUG
                 // Random up/down if both are pressed
-                if (keyStateUp && keyStateDown) {
+                if (keyStateUp && keyStateDown)
+                {
                     debounceKeyPress = 0;
 
                     var r = new Random().Next(0, 5);
 
-                    switch (r) {
+                    switch (r)
+                    {
                         case 1:
                             keyStateUp = true;
                             keyStateDown = false;
@@ -930,53 +1144,67 @@ namespace ItemSearchPlugin {
 #endif
 
                 var hotkeyUsed = false;
-                if (keyStateUp && !keyStateDown) {
-                    if (debounceKeyPress == 0) {
+                if (keyStateUp && !keyStateDown)
+                {
+                    if (debounceKeyPress == 0)
+                    {
                         debounceKeyPress = 5;
-                        if (selectedItemIndex > 0) {
+                        if (selectedItemIndex > 0)
+                        {
                             hotkeyUsed = true;
                             selectedItemIndex -= 1;
                         }
                     }
-                } else if (keyStateDown && !keyStateUp) {
-                    if (debounceKeyPress == 0) {
+                }
+                else if (keyStateDown && !keyStateUp)
+                {
+                    if (debounceKeyPress == 0)
+                    {
                         debounceKeyPress = 5;
-                        if (selectedItemIndex < itemList.Count - 1) {
+                        if (selectedItemIndex < itemList.Count - 1)
+                        {
                             selectedItemIndex += 1;
                             hotkeyUsed = true;
                         }
                     }
-                } else if (debounceKeyPress > 0) {
+                }
+                else if (debounceKeyPress > 0)
+                {
                     debounceKeyPress -= 1;
-                    if (debounceKeyPress < 0) {
+                    if (debounceKeyPress < 0)
+                    {
                         debounceKeyPress = 5;
                     }
                 }
 
-                if (hotkeyUsed) {
+                if (hotkeyUsed)
+                {
                     doSearchScroll = true;
                     selectedItem = itemList[selectedItemIndex];
-                    if (selectedItem.GenericItemType == GenericItem.ItemType.Item) {
-                        if ((autoTryOn = autoTryOn && pluginConfig.ShowTryOn) && plugin.TryOn.CanUseTryOn && ClientState.LocalContentId != 0) {
+                    if (selectedItem.GenericItemType == GenericItem.ItemType.Item)
+                    {
+                        if ((autoTryOn = autoTryOn && pluginConfig.ShowTryOn) && plugin.TryOn.CanUseTryOn &&
+                            ClientState.LocalContentId != 0)
+                        {
                             if (selectedItem.ClassJobCategory.RowId != 0)
                             {
-                                plugin.TryOn.TryOnItem((Item)selectedItem, selectedStain?.RowId ?? 0, selectedStain2?.RowId ?? 0);
+                                plugin.TryOn.TryOnItem((Item)selectedItem, selectedStain?.RowId ?? 0,
+                                    selectedStain2?.RowId ?? 0);
                             }
                         }
-                        
-                        if (autoPreviewHousing && pluginConfig.ShowPreviewHousing && ClientState.LocalContentId != 0) {
+
+                        if (autoPreviewHousing && pluginConfig.ShowPreviewHousing && ClientState.LocalContentId != 0)
+                        {
                             plugin.PreviewHousingItem(selectedItem);
                             plugin.PreviewExteriorHousingItem(selectedItem, selectedStain?.RowId ?? 0);
                         }
                     }
-
-                    keyStateUp = false;
-                    keyStateDown = false;
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 PluginLog.Error($"{ex}");
                 ImGui.SetScrollY(0);
-                
             }
 
             if (fontPushed) ImGui.PopFont();
@@ -985,22 +1213,24 @@ namespace ItemSearchPlugin {
         }
 
 
-
-        private void FixStainsOrder() {
+        private void FixStainsOrder()
+        {
             var move = stains.GetRange(92, 3);
             stains.RemoveRange(92, 3);
             stains.AddRange(move);
         }
 
-        public void Dispose() {
-            foreach (var f in SearchFilters) {
-                f?.Dispose();
+        public void Dispose()
+        {
+            foreach (var f in SearchFilters)
+            {
+                f.Dispose();
             }
 
-            foreach (var b in ActionButtons) {
-                b?.Dispose();
+            foreach (var b in actionButtons)
+            {
+                b.Dispose();
             }
-
         }
     }
 }
