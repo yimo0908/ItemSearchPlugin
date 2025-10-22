@@ -24,17 +24,17 @@ namespace ItemSearchPlugin
 
         public string Language { get; set; }
 
-        public bool CloseOnChoose { get; private set; }
+        public bool CloseOnChoose { get; set; }
 
-        public bool ShowItemID { get; private set; }
+        public bool ShowItemID { get; set; }
 
         public uint MaxItemLevel { get; set; }
 
-        public bool ShowTryOn { get; private set; }
+        public bool ShowTryOn { get; set; }
 
-        public bool ShowPreviewHousing { get; private set; }
+        public bool ShowPreviewHousing { get; set; }
 
-        private string DataSite { get; set; }
+        public string DataSite { get; set; }
 
         public SortedSet<uint> Favorites { get; set; } = new SortedSet<uint>();
 
@@ -91,14 +91,14 @@ namespace ItemSearchPlugin
             }
         }
 
-        public bool HideKofi { get; private set; }
+        public bool HideKofi { get; set; }
         public bool TryOnEnabled { get; set; }
         public bool PreviewHousingEnabled { get; set; }
-        public bool AutoFocus { get; private set; } = true;
-        public bool SuppressTryOnMessage { get; private set; } = true;
-        public bool TeamcraftForceBrowser { get; private set; }
+        public bool AutoFocus { get; set; }
+        public bool SuppressTryOnMessage { get; set; }
+        public bool TeamcraftForceBrowser { get; set; }
 
-        public SortType SortType { get; private set; } = SortType.ItemID;
+        public SortType SortType { get; set; } = SortType.ItemID;
 
         public ItemSearchPluginConfig()
         {

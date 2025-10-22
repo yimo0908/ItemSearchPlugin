@@ -55,8 +55,8 @@ namespace ItemSearchPlugin
         internal List<GenericItem>? LuminaItems { get; set; }
         internal ClientLanguage LuminaItemsClientLanguage { get; set; }
 
-        public static DataSite[] DataSites { get; private set; } = [new GarlandToolsDataSite(ClientState)];
-        public string Version { get; private set; }
+        public static DataSite[] DataSites { get; set; } = [new GarlandToolsDataSite(ClientState)];
+        public string Version { get; set; }
 
         public void Dispose()
         {
